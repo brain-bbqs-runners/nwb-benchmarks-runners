@@ -1,0 +1,158 @@
+# Reusable workflow: runs the NWB Benchmarks suite on ONE self-hosted runner and
+# commits the results to the results repository with that runner's own token.
+#
+# Do not schedule this workflow directly. Each runner (or "situation") gets its own
+# small caller workflow, generated from templates/runner-workflow.yml, which picks the
+# schedule and passes the runner label. The label doubles as the name of the GitHub
+# Environment that stores the runner's secret (RESULTS_UPLOAD_TOKEN) and variables.
+name: Benchmarks
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: >-
+          Label of the self-hosted runner to run on. A GitHub Environment with the same name
+          must exist and hold the RESULTS_UPLOAD_TOKEN secret plus any configuration variables.
+        required: true
+        type: string
+      nwb_benchmarks_repository:
+        description: GitHub repository (owner/name) containing the benchmark suite.
+        required: false
+        type: string
+        default: NeurodataWithoutBorders/nwb-benchmarks
+      nwb_benchmarks_ref:
+        description: Branch, tag, or commit of the benchmark suite to run.
+        required: false
+        type: string
+        default: main
+      benchmark_pattern:
+        description: Optional `--bench` pattern selecting a subset of the suite. Empty runs everything.
+        required: false
+        type: string
+        default: ""
+      debug:
+        description: Run with `--debug` (one repeat, verbose output, nothing uploaded). Use it to smoke-test a new runner.
+        required: false
+        type: boolean
+        default: false
+      upload:
+        description: Upload the results to the results repository.
+        required: false
+        type: boolean
+        default: true
+      timeout_minutes:
+        description: Maximum duration of the job in minutes.
+        required: false
+        type: number
+        default: 720
+    secrets:
+      RESULTS_UPLOAD_TOKEN:
+        description: >-
+          Token with write access to the results repository. Store it on the runner's GitHub
+          Environment and call this workflow with `secrets: inherit`; the environment-scoped
+          value takes precedence.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  benchmarks:
+    name: ${{ inputs.runner }}
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner }}
+    # The environment supplies this runner's token and variables and enables per-runner
+    # protection rules and deployment history in the GitHub UI.
+    environment: ${{ inputs.runner }}
+    # Never run two benchmark jobs on the same machine at once; a second trigger waits.
+    concurrency:
+      group: nwb-benchmarks-${{ inputs.runner }}
+      cancel-in-progress: false
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      RUNNER_LABEL: ${{ inputs.runner }}
+      NWB_BENCHMARKS_CLONE_DIR: ${{ github.workspace }}/nwb-benchmarks
+      NWB_BENCHMARKS_CONDA_ENV: ${{ vars.NWB_BENCHMARKS_CONDA_ENV || 'nwb_benchmarks_runner' }}
+      # Machine-specific settings come from the variables of the runner's GitHub Environment.
+      # Every one of them is optional; see README.md for the meaning and defaults.
+      CONDA_ROOT: ${{ vars.CONDA_ROOT }}
+      TSHARK_PATH: ${{ vars.TSHARK_PATH }}
+      NWB_BENCHMARKS_NETWORK_INTERFACE: ${{ vars.NWB_BENCHMARKS_NETWORK_INTERFACE }}
+      NWB_BENCHMARKS_USE_SUDO: ${{ vars.NWB_BENCHMARKS_USE_SUDO || 'auto' }}
+      NWB_BENCHMARKS_CACHE_DIRECTORY: ${{ vars.NWB_BENCHMARKS_CACHE_DIRECTORY }}
+      NWB_BENCHMARKS_KEEP_CONDA_ENV: ${{ vars.NWB_BENCHMARKS_KEEP_CONDA_ENV || 'false' }}
+
+    steps:
+      - name: Check out runner scripts
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Describe runner
+        run: |
+          echo "Runner label:  $RUNNER_LABEL"
+          echo "Runner name:   ${RUNNER_NAME:-unknown}"
+          echo "User:          $(id -un)"
+          echo "System:        $(uname -a)"
+          echo "Workspace:     $GITHUB_WORKSPACE"
+          echo "Disk:"
+          df -h "$GITHUB_WORKSPACE" || true
+
+      - name: Clone nwb-benchmarks
+        env:
+          REPOSITORY: ${{ inputs.nwb_benchmarks_repository }}
+          REF: ${{ inputs.nwb_benchmarks_ref }}
+        run: |
+          if [ -e "$NWB_BENCHMARKS_CLONE_DIR" ]; then
+            # Leftovers from an earlier run may be root-owned if it used sudo.
+            rm -rf "$NWB_BENCHMARKS_CLONE_DIR" || sudo -n rm -rf "$NWB_BENCHMARKS_CLONE_DIR"
+          fi
+          git clone --quiet "https://github.com/${REPOSITORY}.git" "$NWB_BENCHMARKS_CLONE_DIR"
+          git -C "$NWB_BENCHMARKS_CLONE_DIR" checkout --quiet "$REF"
+          echo "nwb-benchmarks ${REPOSITORY}@${REF} is at commit $(git -C "$NWB_BENCHMARKS_CLONE_DIR" rev-parse HEAD)"
+
+      - name: Set up conda environment
+        run: bash scripts/setup_environment.sh
+
+      - name: Run benchmarks
+        id: run
+        env:
+          BENCHMARK_PATTERN: ${{ inputs.benchmark_pattern }}
+          DEBUG_MODE: ${{ inputs.debug }}
+          # Both paths are picked up by the artifact step below.
+          RUNNER_LOG_FILE: ${{ runner.temp }}/nwb-benchmarks-run.log
+          RUNNER_ARTIFACT_DIR: ${{ runner.temp }}/nwb-benchmarks-artifact
+        run: bash scripts/run_benchmarks.sh
+
+      - name: Upload results to the results repository
+        if: ${{ !inputs.debug && inputs.upload }}
+        env:
+          RESULTS_UPLOAD_TOKEN: ${{ secrets.RESULTS_UPLOAD_TOKEN }}
+          RESULTS_REPOSITORY: ${{ vars.RESULTS_REPOSITORY || 'NeurodataWithoutBorders/nwb-benchmarks-results' }}
+          RESULTS_BRANCH: ${{ vars.RESULTS_BRANCH || 'main' }}
+          RESULTS_UPLOAD_MODE: ${{ vars.RESULTS_UPLOAD_MODE || 'push' }}
+          RESULTS_UPSTREAM_REPOSITORY: ${{ vars.RESULTS_UPSTREAM_REPOSITORY || 'NeurodataWithoutBorders/nwb-benchmarks-results' }}
+          RESULTS_UPSTREAM_BRANCH: ${{ vars.RESULTS_UPSTREAM_BRANCH || 'main' }}
+        run: bash scripts/upload_results.sh
+
+      - name: Save console log and result files as a workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nwb-benchmarks-${{ inputs.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/nwb-benchmarks-run.log
+            ${{ runner.temp }}/nwb-benchmarks-artifact/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Clean up
+        if: always()
+        env:
+          USED_SUDO: ${{ steps.run.outputs.used_sudo }}
+        run: bash scripts/cleanup.sh

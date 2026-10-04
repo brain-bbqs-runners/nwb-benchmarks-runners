@@ -1,0 +1,49 @@
+# Scheduled benchmark runs on the self-hosted runner labelled `lbl-mac`
+# (the official LBL benchmarking Mac).
+#
+# One file like this exists per runner or situation. It only chooses WHEN to run and
+# WHICH runner to use; everything else lives in benchmarks.yml. To add a runner, copy
+# templates/runner-workflow.yml and follow README.md.
+name: Benchmarks (lbl-mac)
+
+on:
+  schedule:
+    # Cron times are UTC. 07:17 UTC is ~midnight on the US West Coast.
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+    inputs:
+      benchmark_pattern:
+        description: Optional `--bench` pattern; leave empty for the full suite
+        required: false
+        type: string
+        default: ""
+      nwb_benchmarks_ref:
+        description: Branch, tag, or commit of nwb-benchmarks to run
+        required: false
+        type: string
+        default: main
+      debug:
+        description: Debug mode (`--debug`; one repeat, verbose output, nothing uploaded)
+        required: false
+        type: boolean
+        default: false
+      upload:
+        description: Upload results to the results repository
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmarks:
+    uses: ./.github/workflows/benchmarks.yml
+    with:
+      runner: lbl-mac
+      benchmark_pattern: ${{ inputs.benchmark_pattern || '' }}
+      nwb_benchmarks_ref: ${{ inputs.nwb_benchmarks_ref || 'main' }}
+      # Scheduled runs never use debug mode and always upload; manual runs follow the form.
+      debug: ${{ github.event_name == 'workflow_dispatch' && inputs.debug }}
+      upload: ${{ github.event_name != 'workflow_dispatch' || inputs.upload }}
+    secrets: inherit

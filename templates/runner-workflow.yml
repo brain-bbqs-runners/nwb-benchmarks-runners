@@ -1,0 +1,55 @@
+# Template for a per-runner (or per-situation) workflow.
+#
+# 1. Copy this file to .github/workflows/runner-<label>.yml
+# 2. Replace every RUNNER_LABEL below with the label you gave the self-hosted runner
+#    (lowercase letters, digits, and dashes; e.g. `jane-linux-workstation`).
+# 3. Pick a cron schedule (UTC). Consider a different hour than the other runners if
+#    several machines share a network.
+# 4. Optionally pin a `benchmark_pattern` to make this a "situation" workflow that runs a
+#    subset of the suite (e.g. only `time_remote_slicing`).
+#
+# Everything else is handled by .github/workflows/benchmarks.yml. See README.md for the
+# GitHub Environment (secret + variables) that must exist with the same name as the label.
+name: Benchmarks (RUNNER_LABEL)
+
+on:
+  schedule:
+    # Cron times are UTC.
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+    inputs:
+      benchmark_pattern:
+        description: Optional `--bench` pattern; leave empty for the full suite
+        required: false
+        type: string
+        default: ""
+      nwb_benchmarks_ref:
+        description: Branch, tag, or commit of nwb-benchmarks to run
+        required: false
+        type: string
+        default: main
+      debug:
+        description: Debug mode (`--debug`; one repeat, verbose output, nothing uploaded)
+        required: false
+        type: boolean
+        default: false
+      upload:
+        description: Upload results to the results repository
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmarks:
+    uses: ./.github/workflows/benchmarks.yml
+    with:
+      runner: RUNNER_LABEL
+      benchmark_pattern: ${{ inputs.benchmark_pattern || '' }}
+      nwb_benchmarks_ref: ${{ inputs.nwb_benchmarks_ref || 'main' }}
+      # Scheduled runs never use debug mode and always upload; manual runs follow the form.
+      debug: ${{ github.event_name == 'workflow_dispatch' && inputs.debug }}
+      upload: ${{ github.event_name != 'workflow_dispatch' || inputs.upload }}
+    secrets: inherit

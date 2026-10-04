@@ -1,0 +1,40 @@
+# Static checks for this repository's workflows and scripts. Runs on GitHub-hosted
+# runners only; the self-hosted runners are never exposed to pull requests.
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: actionlint and shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install actionlint
+        run: |
+          bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: actionlint
+        run: actionlint -color
+
+      - name: shellcheck
+        run: shellcheck --shell=bash --external-sources scripts/*.sh
+
+      - name: Validate the runner template
+        run: |
+          # The template is a real workflow apart from the RUNNER_LABEL placeholders.
+          mkdir -p "$RUNNER_TEMP/template-check/.github/workflows"
+          cp .github/workflows/benchmarks.yml "$RUNNER_TEMP/template-check/.github/workflows/"
+          sed 's/RUNNER_LABEL/example-runner/g' templates/runner-workflow.yml > "$RUNNER_TEMP/template-check/.github/workflows/runner-example-runner.yml"
+          cd "$RUNNER_TEMP/template-check" && git init --quiet && actionlint -color
