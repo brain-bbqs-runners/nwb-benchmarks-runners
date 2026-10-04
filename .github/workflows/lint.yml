@@ -33,8 +33,9 @@ jobs:
 
       - name: Validate the runner template
         run: |
-          # The template is a real workflow apart from the RUNNER_LABEL placeholders.
+          # The template is a real workflow apart from its two placeholders.
           mkdir -p "$RUNNER_TEMP/template-check/.github/workflows"
           cp .github/workflows/benchmarks.yml "$RUNNER_TEMP/template-check/.github/workflows/"
-          sed 's/RUNNER_LABEL/example-runner/g' templates/runner-workflow.yml > "$RUNNER_TEMP/template-check/.github/workflows/runner-example-runner.yml"
+          sed -e 's/RUNNER_SECRET_NAME/RESULTS_UPLOAD_TOKEN_EXAMPLE_RUNNER/g' -e 's/RUNNER_LABEL/example-runner/g' \
+            templates/runner-workflow.yml > "$RUNNER_TEMP/template-check/.github/workflows/runner-example-runner.yml"
           cd "$RUNNER_TEMP/template-check" && git init --quiet && actionlint -color

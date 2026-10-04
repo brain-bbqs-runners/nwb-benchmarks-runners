@@ -67,7 +67,7 @@ if [ -z "${NWB_BENCHMARKS_NETWORK_INTERFACE:-}" ]; then
     export NWB_BENCHMARKS_NETWORK_INTERFACE="$detected"
     log "Network interface (auto-detected): $detected"
   else
-    warn "NWB_BENCHMARKS_NETWORK_INTERFACE is not set and could not be detected. Set it as a variable of the runner's GitHub Environment (e.g. en0, eth0, Ethernet)."
+    warn "NWB_BENCHMARKS_NETWORK_INTERFACE is not set and could not be detected. Set the 'network_interface' input in this runner's workflow file (e.g. en0, eth0, Ethernet)."
   fi
 else
   log "Network interface: $NWB_BENCHMARKS_NETWORK_INTERFACE"

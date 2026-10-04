@@ -76,7 +76,7 @@ if [ "${#PENDING[@]}" -eq 0 ]; then
 fi
 log "${#PENDING[@]} pending file(s) in $PENDING_DIR"
 
-[ -n "$TOKEN" ] || die "RESULTS_UPLOAD_TOKEN is empty. Add it as a secret of the GitHub Environment named '$RUNNER_LABEL' (repository Settings > Environments). The staged files are kept and will be uploaded by the next successful run."
+[ -n "$TOKEN" ] || die "RESULTS_UPLOAD_TOKEN is empty. Add a repository secret for runner '$RUNNER_LABEL' (convention: RESULTS_UPLOAD_TOKEN_<LABEL>) and pass it as RESULTS_UPLOAD_TOKEN in the runner's workflow file. The staged files are kept and will be uploaded by the next successful run."
 
 # --- Authentication -----------------------------------------------------------------
 # The token travels in an HTTP header passed on the command line of each git call, so it

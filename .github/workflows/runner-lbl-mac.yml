@@ -1,8 +1,9 @@
 # Scheduled benchmark runs on the self-hosted runner labelled `lbl-mac`
 # (the official LBL benchmarking Mac).
 #
-# One file like this exists per runner or situation. It only chooses WHEN to run and
-# WHICH runner to use; everything else lives in benchmarks.yml. To add a runner, copy
+# One file like this exists per runner or situation. It chooses WHEN to run, WHICH runner
+# to use, how that machine is configured, and WHICH repository secret holds the runner's
+# upload token. Everything else lives in benchmarks.yml. To add a runner, copy
 # templates/runner-workflow.yml and follow README.md.
 name: Benchmarks (lbl-mac)
 
@@ -41,9 +42,16 @@ jobs:
     uses: ./.github/workflows/benchmarks.yml
     with:
       runner: lbl-mac
+      # Machine configuration is optional; see "Configuration reference" in README.md.
+      # conda_root: /Users/benchmarks/miniforge3
+      # network_interface: en0
+      # tshark_path: /Applications/Wireshark.app/Contents/MacOS/tshark
+      # Run options, forwarded from the manual trigger form. Scheduled runs never use debug
+      # mode and always upload.
       benchmark_pattern: ${{ inputs.benchmark_pattern || '' }}
       nwb_benchmarks_ref: ${{ inputs.nwb_benchmarks_ref || 'main' }}
-      # Scheduled runs never use debug mode and always upload; manual runs follow the form.
       debug: ${{ github.event_name == 'workflow_dispatch' && inputs.debug }}
       upload: ${{ github.event_name != 'workflow_dispatch' || inputs.upload }}
-    secrets: inherit
+    secrets:
+      # Repository secret holding this runner's token: Settings > Secrets and variables > Actions.
+      RESULTS_UPLOAD_TOKEN: ${{ secrets.RESULTS_UPLOAD_TOKEN_LBL_MAC }}

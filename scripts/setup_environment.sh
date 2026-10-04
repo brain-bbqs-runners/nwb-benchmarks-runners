@@ -26,7 +26,7 @@ ENVIRONMENT_FILE="$CLONE_DIR/environments/nwb_benchmarks.yaml"
 [ -f "$ENVIRONMENT_FILE" ] || die "Environment file not found: $ENVIRONMENT_FILE"
 
 if ! CONDA_ROOT="$(find_conda_root)"; then
-  die "No conda installation was found. Install Miniforge or Miniconda for the user running the GitHub Actions runner, or set the CONDA_ROOT variable of the runner's GitHub Environment to the installation directory."
+  die "No conda installation was found. Install Miniforge or Miniconda for the user running the GitHub Actions runner, or set the 'conda_root' input in this runner's workflow file to the installation directory."
 fi
 export CONDA_ROOT
 log "conda installation: $CONDA_ROOT"
@@ -59,7 +59,7 @@ if [ -n "${TSHARK_PATH:-}" ]; then
     warn "TSHARK_PATH='$TSHARK_PATH' is not an executable file; network tracking benchmarks will fail."
   fi
 elif ! command -v tshark > /dev/null 2>&1; then
-  warn "tshark was not found on PATH, so the network tracking benchmarks will be skipped. Install Wireshark/tshark on this machine or set the TSHARK_PATH variable of the runner's GitHub Environment."
+  warn "tshark was not found on PATH, so the network tracking benchmarks will be skipped. Install Wireshark/tshark on this machine or set the 'tshark_path' input in this runner's workflow file."
 fi
 
 {
