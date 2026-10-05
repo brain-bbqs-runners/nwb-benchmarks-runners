@@ -10,7 +10,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/common.sh
+# shellcheck source=common.sh
 . "$SCRIPT_DIR/common.sh"
 
 USED_SUDO="$(normalize_bool "${USED_SUDO:-}" false)"

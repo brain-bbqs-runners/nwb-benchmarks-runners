@@ -1,0 +1,57 @@
+# Scheduled benchmark runs on the self-hosted runner labelled `ackermann`
+# (Cody Baker's machine).
+#
+# One file like this exists per runner or situation. It chooses WHEN to run, WHICH runner
+# to use, how that machine is configured, and WHICH repository secret holds the runner's
+# upload token. Everything else lives in benchmarks.yml. To add a runner, copy
+# templates/runner-workflow.yml and follow README.md.
+name: Benchmarks (ackermann)
+
+on:
+  schedule:
+    # Cron times are UTC. 05:17 UTC is ~01:17 US Eastern; staggered from lbl-mac.
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+    inputs:
+      benchmark_pattern:
+        description: Optional `--bench` pattern; leave empty for the full suite
+        required: false
+        type: string
+        default: ""
+      nwb_benchmarks_ref:
+        description: Branch, tag, or commit of nwb-benchmarks to run
+        required: false
+        type: string
+        default: main
+      debug:
+        description: Debug mode (`--debug`; one repeat, verbose output, nothing uploaded)
+        required: false
+        type: boolean
+        default: false
+      upload:
+        description: Upload results to the results repository
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmarks:
+    uses: ./.github/workflows/benchmarks.yml
+    with:
+      runner: ackermann
+      # Machine configuration is optional; see "Configuration reference" in README.md.
+      # conda_root: /Users/cody/miniforge3
+      # network_interface: en0
+      # tshark_path: /Applications/Wireshark.app/Contents/MacOS/tshark
+      # Run options, forwarded from the manual trigger form. Scheduled runs never use debug
+      # mode and always upload.
+      benchmark_pattern: ${{ inputs.benchmark_pattern || '' }}
+      nwb_benchmarks_ref: ${{ inputs.nwb_benchmarks_ref || 'main' }}
+      debug: ${{ github.event_name == 'workflow_dispatch' && inputs.debug }}
+      upload: ${{ github.event_name != 'workflow_dispatch' || inputs.upload }}
+    secrets:
+      # Repository secret holding this runner's token: Settings > Secrets and variables > Actions.
+      RESULTS_UPLOAD_TOKEN: ${{ secrets.RESULTS_UPLOAD_TOKEN_ACKERMANN }}

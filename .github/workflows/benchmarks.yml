@@ -5,6 +5,10 @@
 # caller workflow, generated from templates/runner-workflow.yml, which picks the schedule,
 # names the runner label, describes the machine through the inputs below, and passes the
 # runner's repository secret (RESULTS_UPLOAD_TOKEN_<LABEL>) as RESULTS_UPLOAD_TOKEN.
+#
+# This workflow only adds the job-level settings (which runner, one job per runner at a
+# time, timeout). All the steps live in the composite action .github/actions/benchmarks,
+# which other workflows can also use directly.
 name: Benchmarks
 
 on:
@@ -134,98 +138,31 @@ jobs:
       group: nwb-benchmarks-${{ inputs.runner }}
       cancel-in-progress: false
     timeout-minutes: ${{ inputs.timeout_minutes }}
-    defaults:
-      run:
-        shell: bash
-    env:
-      RUNNER_LABEL: ${{ inputs.runner }}
-      NWB_BENCHMARKS_CLONE_DIR: ${{ github.workspace }}/nwb-benchmarks
-      NWB_BENCHMARKS_CONDA_ENV: ${{ inputs.conda_env_name }}
-      CONDA_ROOT: ${{ inputs.conda_root }}
-      TSHARK_PATH: ${{ inputs.tshark_path }}
-      NWB_BENCHMARKS_NETWORK_INTERFACE: ${{ inputs.network_interface }}
-      NWB_BENCHMARKS_USE_SUDO: ${{ inputs.use_sudo }}
-      NWB_BENCHMARKS_CACHE_DIRECTORY: ${{ inputs.cache_directory }}
-      NWB_BENCHMARKS_KEEP_CONDA_ENV: ${{ inputs.keep_conda_env }}
-
     steps:
-      - name: Check out runner scripts
+      - name: Check out the benchmarks action
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      # Fail in seconds rather than after hours of benchmarking when the token is missing.
-      - name: Check that an upload token was passed
-        if: ${{ !inputs.debug && inputs.upload }}
-        env:
-          RESULTS_UPLOAD_TOKEN: ${{ secrets.RESULTS_UPLOAD_TOKEN }}
-        run: |
-          if [ -z "$RESULTS_UPLOAD_TOKEN" ]; then
-            echo "::error::No upload token was passed for runner '$RUNNER_LABEL'. Add a repository secret for this runner (convention: RESULTS_UPLOAD_TOKEN_<LABEL>) and pass it as RESULTS_UPLOAD_TOKEN in the runner's workflow file, or run with upload disabled."
-            exit 1
-          fi
-          echo "Upload token present."
-
-      - name: Describe runner
-        run: |
-          echo "Runner label:  $RUNNER_LABEL"
-          echo "Runner name:   ${RUNNER_NAME:-unknown}"
-          echo "User:          $(id -un)"
-          echo "System:        $(uname -a)"
-          echo "Workspace:     $GITHUB_WORKSPACE"
-          echo "Disk:"
-          df -h "$GITHUB_WORKSPACE" || true
-
-      - name: Clone nwb-benchmarks
-        env:
-          REPOSITORY: ${{ inputs.nwb_benchmarks_repository }}
-          REF: ${{ inputs.nwb_benchmarks_ref }}
-        run: |
-          if [ -e "$NWB_BENCHMARKS_CLONE_DIR" ]; then
-            # Leftovers from an earlier run may be root-owned if it used sudo.
-            rm -rf "$NWB_BENCHMARKS_CLONE_DIR" || sudo -n rm -rf "$NWB_BENCHMARKS_CLONE_DIR"
-          fi
-          git clone --quiet "https://github.com/${REPOSITORY}.git" "$NWB_BENCHMARKS_CLONE_DIR"
-          git -C "$NWB_BENCHMARKS_CLONE_DIR" checkout --quiet "$REF"
-          echo "nwb-benchmarks ${REPOSITORY}@${REF} is at commit $(git -C "$NWB_BENCHMARKS_CLONE_DIR" rev-parse HEAD)"
-
-      - name: Set up conda environment
-        run: bash scripts/setup_environment.sh
-
-      - name: Run benchmarks
-        id: run
-        env:
-          BENCHMARK_PATTERN: ${{ inputs.benchmark_pattern }}
-          DEBUG_MODE: ${{ inputs.debug }}
-          # Both paths are picked up by the artifact step below.
-          RUNNER_LOG_FILE: ${{ runner.temp }}/nwb-benchmarks-run.log
-          RUNNER_ARTIFACT_DIR: ${{ runner.temp }}/nwb-benchmarks-artifact
-        run: bash scripts/run_benchmarks.sh
-
-      - name: Upload results to the results repository
-        if: ${{ !inputs.debug && inputs.upload }}
-        env:
-          RESULTS_UPLOAD_TOKEN: ${{ secrets.RESULTS_UPLOAD_TOKEN }}
-          RESULTS_REPOSITORY: ${{ inputs.results_repository }}
-          RESULTS_BRANCH: ${{ inputs.results_branch }}
-          RESULTS_UPLOAD_MODE: ${{ inputs.upload_mode }}
-          RESULTS_UPSTREAM_REPOSITORY: ${{ inputs.upstream_repository }}
-          RESULTS_UPSTREAM_BRANCH: ${{ inputs.upstream_branch }}
-        run: bash scripts/upload_results.sh
-
-      - name: Save console log and result files as a workflow artifact
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Run the benchmarks and upload the results
+        uses: ./.github/actions/benchmarks
         with:
-          name: nwb-benchmarks-${{ inputs.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/nwb-benchmarks-run.log
-            ${{ runner.temp }}/nwb-benchmarks-artifact/
-          if-no-files-found: ignore
-          retention-days: 30
-
-      - name: Clean up
-        if: always()
-        env:
-          USED_SUDO: ${{ steps.run.outputs.used_sudo }}
-        run: bash scripts/cleanup.sh
+          runner-label: ${{ inputs.runner }}
+          results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN }}
+          nwb-benchmarks-repository: ${{ inputs.nwb_benchmarks_repository }}
+          nwb-benchmarks-ref: ${{ inputs.nwb_benchmarks_ref }}
+          benchmark-pattern: ${{ inputs.benchmark_pattern }}
+          debug: ${{ inputs.debug }}
+          upload: ${{ inputs.upload }}
+          conda-root: ${{ inputs.conda_root }}
+          conda-env-name: ${{ inputs.conda_env_name }}
+          network-interface: ${{ inputs.network_interface }}
+          tshark-path: ${{ inputs.tshark_path }}
+          use-sudo: ${{ inputs.use_sudo }}
+          cache-directory: ${{ inputs.cache_directory }}
+          keep-conda-env: ${{ inputs.keep_conda_env }}
+          results-repository: ${{ inputs.results_repository }}
+          results-branch: ${{ inputs.results_branch }}
+          upload-mode: ${{ inputs.upload_mode }}
+          upstream-repository: ${{ inputs.upstream_repository }}
+          upstream-branch: ${{ inputs.upstream_branch }}

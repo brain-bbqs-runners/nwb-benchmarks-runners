@@ -16,11 +16,13 @@ removes the old uploader from the suite.)
 ## How it works
 
 ```
+.github/actions/benchmarks/
+  action.yml             composite action with all the steps (clone, conda env, run, upload, clean up)
+  scripts/               the shell scripts the action runs on the self-hosted machine
 .github/workflows/
-  benchmarks.yml         reusable workflow with all the logic (clone, conda env, run, upload, clean up)
+  benchmarks.yml         reusable workflow: job-level settings (runner, concurrency, timeout) around the action
   runner-<label>.yml     one per runner or situation: schedule, runner label, machine config, token secret
-  lint.yml               actionlint + shellcheck, on GitHub-hosted runners only
-scripts/                 the shell steps that benchmarks.yml runs on the self-hosted machine
+  lint.yml               actionlint + shellcheck + action validation, on GitHub-hosted runners only
 templates/runner-workflow.yml   copy this file to add a runner
 ```
 
@@ -37,11 +39,25 @@ A runner is described by exactly two things:
 A "situation" is just another workflow file: the same machine can have one file that runs the full suite
 nightly and another that runs a `--bench` subset hourly, both passing the same secret.
 
+The per-runner file calls the reusable workflow `benchmarks.yml`, which only adds the job-level settings
+(which runner, one job per runner at a time, timeout) around the **composite action**
+`.github/actions/benchmarks`. The action holds every step and its shell scripts, so it can also be used on
+its own from any workflow, in this repository or another one:
+
+```yaml
+steps:
+  - uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
+    with:
+      runner-label: my-machine
+      results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN_MY_MACHINE }}
+      # same options as the workflow inputs below, with dashes instead of underscores
+```
+
 Every job on a runner:
 
 1. Fails immediately if it is supposed to upload but no token was passed, so a misnamed secret costs seconds
    rather than hours.
-2. Checks out this repository (for the scripts) and clones `nwb-benchmarks` at the requested ref.
+2. Clones `nwb-benchmarks` at the requested ref.
 3. Creates a **fresh** conda environment from `environments/nwb_benchmarks.yaml`. Fresh on purpose: the
    benchmarks track performance against current dependency versions, and the environment id stored with each
    result is derived from the installed packages.
@@ -134,6 +150,9 @@ the file is merged.
 | `RESULTS_UPLOAD_TOKEN_<LABEL>` | Token with write access to `results_repository`. The runner's workflow file passes it as `RESULTS_UPLOAD_TOKEN`; it reaches git as a per-command HTTP header, is never written to disk on the runner, and is masked in logs. |
 
 ### Inputs of the reusable workflow (set under `with:` in `runner-<label>.yml`)
+
+The composite action takes the same inputs with dashes instead of underscores (`conda-root`, `use-sudo`, ...),
+plus `runner-label` and `results-upload-token`; `timeout_minutes` is job-level and exists only on the workflow.
 
 | Input | Default | Purpose |
 | --- | --- | --- |

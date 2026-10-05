@@ -1,0 +1,218 @@
+# Composite action: runs the NWB Benchmarks suite on the current runner and commits the
+# results to the results repository. This is the common piece every runner workflow ends
+# up executing; .github/workflows/benchmarks.yml wraps it with the job-level settings
+# (runner selection, concurrency, timeout). It can also be used directly:
+#
+#   - uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
+#     with:
+#       runner-label: my-machine
+#       results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN_MY_MACHINE }}
+#
+# The action is self-contained (its shell scripts live in ./scripts), so the calling
+# workflow does not need to check out this repository first.
+#
+# Composite-action inputs are always strings: booleans arrive as "true" / "false".
+name: NWB Benchmarks run
+description: Run the NWB Benchmarks suite on this runner and upload the results with the runner's own token.
+
+inputs:
+  # --- Identity -----------------------------------------------------------------------
+  runner-label:
+    description: Label of this runner, used in commit messages, branch names, and the artifact name. Defaults to the runner's name.
+    required: false
+    default: ""
+  results-upload-token:
+    description: Token with write access to results-repository. Required unless upload is "false" or debug is "true".
+    required: false
+    default: ""
+
+  # --- What to run --------------------------------------------------------------------
+  nwb-benchmarks-repository:
+    description: GitHub repository (owner/name) containing the benchmark suite.
+    required: false
+    default: NeurodataWithoutBorders/nwb-benchmarks
+  nwb-benchmarks-ref:
+    description: Branch, tag, or commit of the benchmark suite to run.
+    required: false
+    default: main
+  benchmark-pattern:
+    description: Optional `--bench` pattern selecting a subset of the suite. Empty runs everything.
+    required: false
+    default: ""
+  debug:
+    description: '"true" runs with `--debug` (one repeat, verbose output, nothing uploaded).'
+    required: false
+    default: "false"
+  upload:
+    description: '"false" skips the upload.'
+    required: false
+    default: "true"
+
+  # --- Machine configuration (all optional) -------------------------------------------
+  conda-root:
+    description: Root of the conda installation (the directory containing etc/profile.d/conda.sh). Auto-detected when empty.
+    required: false
+    default: ""
+  conda-env-name:
+    description: Name of the conda environment created at the start and removed at the end of the run.
+    required: false
+    default: nwb_benchmarks_runner
+  network-interface:
+    description: Network interface for the network tracking benchmarks. Default route interface when empty.
+    required: false
+    default: ""
+  tshark-path:
+    description: Absolute path of the tshark executable. `tshark` on PATH when empty.
+    required: false
+    default: ""
+  use-sudo:
+    description: '"auto" uses sudo when it works without a password, "true" requires it, "false" never uses it.'
+    required: false
+    default: auto
+  cache-directory:
+    description: Directory for the suite's downloads and temporary files. Default when empty.
+    required: false
+    default: ""
+  keep-conda-env:
+    description: '"true" keeps the conda environment after the run for inspection.'
+    required: false
+    default: "false"
+
+  # --- Upload configuration -----------------------------------------------------------
+  results-repository:
+    description: Repository (owner/name) the token pushes to. In pull-request mode, the contributor's fork.
+    required: false
+    default: NeurodataWithoutBorders/nwb-benchmarks-results
+  results-branch:
+    description: Branch pushed to in push mode.
+    required: false
+    default: main
+  upload-mode:
+    description: '"push" commits straight to results-branch; "pull-request" pushes a branch and opens a pull request against upstream-repository.'
+    required: false
+    default: push
+  upstream-repository:
+    description: Pull-request mode. Repository that receives the pull request.
+    required: false
+    default: NeurodataWithoutBorders/nwb-benchmarks-results
+  upstream-branch:
+    description: Pull-request mode. Base branch of the pull request.
+    required: false
+    default: main
+
+outputs:
+  results-count:
+    description: Number of new result files produced by this run (0 in debug mode).
+    value: ${{ steps.run.outputs.results_count }}
+  used-sudo:
+    description: Whether the suite ran under sudo ("true" / "false").
+    value: ${{ steps.run.outputs.used_sudo }}
+
+runs:
+  using: composite
+  steps:
+    # Fail in seconds rather than after hours of benchmarking when the token is missing.
+    - name: Check that an upload token was passed
+      if: ${{ inputs.debug != 'true' && inputs.upload == 'true' }}
+      shell: bash
+      env:
+        RESULTS_UPLOAD_TOKEN: ${{ inputs.results-upload-token }}
+        LABEL: ${{ inputs.runner-label }}
+      run: |
+        if [ -z "$RESULTS_UPLOAD_TOKEN" ]; then
+          echo "::error::No upload token was passed for runner '${LABEL:-$RUNNER_NAME}'. Add a repository secret for this runner (convention: RESULTS_UPLOAD_TOKEN_<LABEL>) and pass it as results-upload-token, or run with upload disabled."
+          exit 1
+        fi
+        echo "Upload token present."
+
+    # Composite actions have no action-level `env`, so the configuration shared by the
+    # scripts is exported once here. The token is deliberately not among these variables.
+    - name: Configure
+      shell: bash
+      env:
+        LABEL: ${{ inputs.runner-label }}
+        CLONE_DIR: ${{ github.workspace }}/nwb-benchmarks
+        CONDA_ENV_NAME: ${{ inputs.conda-env-name }}
+        CONDA_ROOT_INPUT: ${{ inputs.conda-root }}
+        TSHARK_PATH_INPUT: ${{ inputs.tshark-path }}
+        NETWORK_INTERFACE_INPUT: ${{ inputs.network-interface }}
+        USE_SUDO_INPUT: ${{ inputs.use-sudo }}
+        CACHE_DIRECTORY_INPUT: ${{ inputs.cache-directory }}
+        KEEP_CONDA_ENV_INPUT: ${{ inputs.keep-conda-env }}
+      run: |
+        set_env() { printf '%s<<__NWB_BENCHMARKS_EOF__\n%s\n__NWB_BENCHMARKS_EOF__\n' "$1" "$2" >> "$GITHUB_ENV"; }
+        set_env RUNNER_LABEL "${LABEL:-$RUNNER_NAME}"
+        set_env NWB_BENCHMARKS_CLONE_DIR "$CLONE_DIR"
+        set_env NWB_BENCHMARKS_CONDA_ENV "${CONDA_ENV_NAME:-nwb_benchmarks_runner}"
+        set_env CONDA_ROOT "$CONDA_ROOT_INPUT"
+        set_env TSHARK_PATH "$TSHARK_PATH_INPUT"
+        set_env NWB_BENCHMARKS_NETWORK_INTERFACE "$NETWORK_INTERFACE_INPUT"
+        set_env NWB_BENCHMARKS_USE_SUDO "${USE_SUDO_INPUT:-auto}"
+        set_env NWB_BENCHMARKS_CACHE_DIRECTORY "$CACHE_DIRECTORY_INPUT"
+        set_env NWB_BENCHMARKS_KEEP_CONDA_ENV "${KEEP_CONDA_ENV_INPUT:-false}"
+        echo "Runner label:  ${LABEL:-$RUNNER_NAME}"
+        echo "Runner name:   ${RUNNER_NAME:-unknown}"
+        echo "User:          $(id -un)"
+        echo "System:        $(uname -a)"
+        echo "Workspace:     $GITHUB_WORKSPACE"
+        echo "Disk:"
+        df -h "$GITHUB_WORKSPACE" || true
+
+    - name: Clone nwb-benchmarks
+      shell: bash
+      env:
+        REPOSITORY: ${{ inputs.nwb-benchmarks-repository }}
+        REF: ${{ inputs.nwb-benchmarks-ref }}
+      run: |
+        if [ -e "$NWB_BENCHMARKS_CLONE_DIR" ]; then
+          # Leftovers from an earlier run may be root-owned if it used sudo.
+          rm -rf "$NWB_BENCHMARKS_CLONE_DIR" || sudo -n rm -rf "$NWB_BENCHMARKS_CLONE_DIR"
+        fi
+        git clone --quiet "https://github.com/${REPOSITORY}.git" "$NWB_BENCHMARKS_CLONE_DIR"
+        git -C "$NWB_BENCHMARKS_CLONE_DIR" checkout --quiet "$REF"
+        echo "nwb-benchmarks ${REPOSITORY}@${REF} is at commit $(git -C "$NWB_BENCHMARKS_CLONE_DIR" rev-parse HEAD)"
+
+    - name: Set up conda environment
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/scripts/setup_environment.sh"
+
+    - name: Run benchmarks
+      id: run
+      shell: bash
+      env:
+        BENCHMARK_PATTERN: ${{ inputs.benchmark-pattern }}
+        DEBUG_MODE: ${{ inputs.debug }}
+        # Both paths are picked up by the artifact step below.
+        RUNNER_LOG_FILE: ${{ runner.temp }}/nwb-benchmarks-run.log
+        RUNNER_ARTIFACT_DIR: ${{ runner.temp }}/nwb-benchmarks-artifact
+      run: bash "$GITHUB_ACTION_PATH/scripts/run_benchmarks.sh"
+
+    - name: Upload results to the results repository
+      if: ${{ inputs.debug != 'true' && inputs.upload == 'true' }}
+      shell: bash
+      env:
+        RESULTS_UPLOAD_TOKEN: ${{ inputs.results-upload-token }}
+        RESULTS_REPOSITORY: ${{ inputs.results-repository }}
+        RESULTS_BRANCH: ${{ inputs.results-branch }}
+        RESULTS_UPLOAD_MODE: ${{ inputs.upload-mode }}
+        RESULTS_UPSTREAM_REPOSITORY: ${{ inputs.upstream-repository }}
+        RESULTS_UPSTREAM_BRANCH: ${{ inputs.upstream-branch }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/upload_results.sh"
+
+    - name: Save console log and result files as a workflow artifact
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: nwb-benchmarks-${{ inputs.runner-label || runner.name }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: |
+          ${{ runner.temp }}/nwb-benchmarks-run.log
+          ${{ runner.temp }}/nwb-benchmarks-artifact/
+        if-no-files-found: ignore
+        retention-days: 30
+
+    - name: Clean up
+      if: ${{ always() }}
+      shell: bash
+      env:
+        USED_SUDO: ${{ steps.run.outputs.used_sudo }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/cleanup.sh"

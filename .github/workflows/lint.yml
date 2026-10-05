@@ -29,7 +29,26 @@ jobs:
         run: actionlint -color
 
       - name: shellcheck
-        run: shellcheck --shell=bash --external-sources scripts/*.sh
+        run: shellcheck --shell=bash --external-sources --source-path=SCRIPTDIR .github/actions/benchmarks/scripts/*.sh
+
+      - name: Validate the composite action
+        run: |
+          # actionlint does not check action.yml files, so make sure the action parses, is a
+          # composite action, and only references inputs it declares.
+          python3 -m pip install --quiet pyyaml
+          python3 - <<'PY'
+          import re, sys, yaml
+          path = ".github/actions/benchmarks/action.yml"
+          action = yaml.safe_load(open(path))
+          assert action["runs"]["using"] == "composite", "not a composite action"
+          declared = set(action["inputs"])
+          referenced = set(re.findall(r"inputs\.([A-Za-z0-9_-]+)", open(path).read()))
+          undeclared = referenced - declared
+          assert not undeclared, f"undeclared inputs referenced: {sorted(undeclared)}"
+          for step in action["runs"]["steps"]:
+              assert "uses" in step or "shell" in step, f"step without shell: {step.get('name')}"
+          print(f"{path}: OK ({len(declared)} inputs, {len(action['runs']['steps'])} steps)")
+          PY
 
       - name: Validate the runner template
         run: |

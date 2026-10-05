@@ -29,7 +29,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/common.sh
+# shellcheck source=common.sh
 . "$SCRIPT_DIR/common.sh"
 
 RUNNER_LABEL="${RUNNER_LABEL:-$(hostname)}"
