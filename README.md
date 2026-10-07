@@ -39,6 +39,7 @@ Each contributor registers one or more of their own machines as self-hosted runn
 templates/runner-workflow.yml   copy this file to add a runner
 .pre-commit-config.yaml         formatting and hygiene hooks (`pre-commit run --all-files`)
 scripts/check_sentence_per_line.py   hook that puts each Markdown sentence on its own line
+docs/development.md             how the workflow, the action and the files on the runner fit together
 ```
 
 A runner is described by exactly two things:
@@ -48,21 +49,7 @@ A runner is described by exactly two things:
 
 A "situation" is just another workflow file: the same machine can have one file that runs the full suite nightly and another that runs a `--bench` subset hourly, both passing the same secret.
 
-Everything a job writes stays inside the runner's `_work` folder.
-The first step of every job points `HOME` at `<runner>/_work/_nwb_benchmarks/home`, so the suite's `~/.nwb_benchmarks`, its download cache, `~/.asv-machine.json`, and conda's own files all land there; the conda installation and (on macOS) the Wireshark copy that provide the toolchain live next to it.
-The runner user's real home directory is never touched.
-
-The per-runner file calls the reusable workflow `benchmarks.yml`, which only adds the job-level settings (which runner, one job per runner at a time, timeout) around the **composite action** `.github/actions/benchmarks`.
-The action holds every step and its shell scripts, so it can also be used on its own from any workflow, in this repository or another one:
-
-```yaml
-steps:
-  - uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
-    with:
-      runner-label: lbl_laptop
-      results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN_LBL_LAPTOP }}
-      # same options as the workflow inputs below, with dashes instead of underscores
-```
+How the pieces fit together (reusable workflow, composite action) and where a job writes on the runner machine are described in [docs/development.md](docs/development.md).
 
 Every job on a runner:
 
