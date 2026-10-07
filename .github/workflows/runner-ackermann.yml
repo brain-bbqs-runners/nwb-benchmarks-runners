@@ -22,7 +22,7 @@ on:
         description: Branch, tag, or commit of nwb-benchmarks to run
         required: false
         type: string
-        default: main
+        default: pin-python-3.13
       debug:
         description: Debug mode (`--debug`; one repeat, verbose output, nothing uploaded)
         required: false
@@ -49,7 +49,9 @@ jobs:
       # Run options, forwarded from the manual trigger form. Scheduled runs never use debug
       # mode and always upload.
       benchmark_pattern: ${{ inputs.benchmark_pattern || '' }}
-      nwb_benchmarks_ref: ${{ inputs.nwb_benchmarks_ref || 'main' }}
+      # TEMPORARY: the pin-python-3.13 branch (NeurodataWithoutBorders/nwb-benchmarks#209) until
+      # it merges; main pins Python 3.14, whose numcodecs has no wheel and needs a C compiler.
+      nwb_benchmarks_ref: ${{ inputs.nwb_benchmarks_ref || 'pin-python-3.13' }}
       debug: ${{ github.event_name == 'workflow_dispatch' && inputs.debug }}
       upload: ${{ github.event_name != 'workflow_dispatch' || inputs.upload }}
     secrets:
