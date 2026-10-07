@@ -41,6 +41,7 @@ removes the old uploader from the suite.)
 .github/workflows/
   benchmarks.yml         reusable workflow: job-level settings (runner, concurrency, timeout) around the action
   runner-<label>.yml     one per runner or situation: schedule, runner label, machine config, token secret
+  setup-runner.yml       manual: install conda (and tshark on macOS) under _work, check sudo, build the env once
   lint.yml               actionlint + shellcheck + action validation, on GitHub-hosted runners only
 templates/runner-workflow.yml   copy this file to add a runner
 ```
@@ -56,6 +57,11 @@ A runner is described by exactly two things:
 
 A "situation" is just another workflow file: the same machine can have one file that runs the full suite
 nightly and another that runs a `--bench` subset hourly, both passing the same secret.
+
+Everything a job writes stays inside the runner's `_work` folder. The first step of every job points `HOME`
+at `<runner>/_work/_nwb_benchmarks/home`, so the suite's `~/.nwb_benchmarks`, its download cache,
+`~/.asv-machine.json`, and conda's own files all land there; the conda installation and (on macOS) the Wireshark
+copy that provide the toolchain live next to it. The runner user's real home directory is never touched.
 
 The per-runner file calls the reusable workflow `benchmarks.yml`, which only adds the job-level settings
 (which runner, one job per runner at a time, timeout) around the **composite action**
@@ -94,16 +100,26 @@ Every job on a runner:
 
 - macOS or Linux. Windows is best effort: it needs Git for Windows (for `bash`) and cannot run the
   network tracking benchmarks, which need root.
-- A conda installation ([Miniforge](https://github.com/conda-forge/miniforge) recommended) for the user account
-  that will run the GitHub Actions runner service. Common install locations are detected automatically;
-  anything else needs the `conda_root` input (below).
 - `git`.
-- [tshark](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks.
+- conda: the **Set up runner** workflow (below) installs [Miniforge](https://github.com/conda-forge/miniforge)
+  under `<runner>/_work/_nwb_benchmarks/miniforge3`. An existing installation on `PATH` or in a common location
+  is detected too; anything else needs the `conda_root` input.
+- [tshark](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks. On macOS
+  the Set up runner workflow copies `Wireshark.app` under `_work`, where its `tshark` is found automatically.
+  Linux has no portable build, so install the distribution package yourself (`sudo apt-get install tshark`,
+  `sudo dnf install wireshark-cli`); on Windows install Wireshark and set `tshark_path`.
 - Root for the network tracking benchmarks, in one of the forms described under "Root and sudo" below
   (passwordless sudo is the usual choice). Without it the network tracking benchmarks are skipped or fail while
   the timing benchmarks still run.
 - The machine must be awake and online at the scheduled times and should otherwise be idle while the suite runs;
   a full run takes hours.
+
+Most of this can be done for you: after registering the runner (step 2), run **Actions → Set up runner → Run
+workflow** with the runner's label. It installs Miniforge when no conda is found and, on macOS, Wireshark when
+tshark is missing, both under `<runner>/_work/_nwb_benchmarks` and without sudo; reports sudo, the default
+network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works;
+and ends with the exact lines to add to the runner's workflow file, if any. Re-run it any time to repair a
+machine; it only installs what is missing.
 
 ### 2. Register the self-hosted runner
 
@@ -253,12 +269,12 @@ plus `runner-label` and `results-upload-token`; `timeout_minutes` is job-level a
 | `debug` | `false` | `--debug`: one repeat, verbose output, nothing staged or uploaded. |
 | `upload` | `true` | Set to `false` to run without uploading. |
 | `timeout_minutes` | `720` | Job timeout. |
-| `conda_root` | auto-detected | Root of the conda installation (the directory containing `etc/profile.d/conda.sh`). Set it when the job logs "No conda installation was found". |
+| `conda_root` | auto-detected | Root of the conda installation (the directory containing `etc/profile.d/conda.sh`). Searched: under `_work`, on `PATH`, common locations. Set it when the job logs "No conda installation was found". |
 | `conda_env_name` | `nwb_benchmarks_runner` | Name of the conda environment created at the start and removed at the end of every job. |
 | `network_interface` | interface of the default route | Interface for network tracking (`en0`, `eth0`, `Ethernet`, ...). Set it if auto-detection picks the wrong one or fails. |
-| `tshark_path` | `tshark` on `PATH` | Absolute path of the tshark executable. Required on Windows. |
+| `tshark_path` | auto-detected | Absolute path of the tshark executable. Searched: the Wireshark copy under `_work`, `PATH`, common locations. Required on Windows. |
 | `use_sudo` | `auto` | `auto` uses sudo when it works without a password; `true` requires it (job fails otherwise); `false` never uses it. |
-| `cache_directory` | `~/.cache/nwb_benchmarks` | Passed to `nwb_benchmarks config_set_cache`; put it on a large disk, the suite downloads whole NWB files. |
+| `cache_directory` | under `_work` | Passed to `nwb_benchmarks config_set_cache`; the suite downloads whole NWB files, so point it at a large disk if `_work` is on a small one. |
 | `keep_conda_env` | `false` | Keep the conda environment after the job for inspection. |
 | `results_repository` | `NeurodataWithoutBorders/nwb-benchmarks-results` | Repository the results are committed to; the token needs write access to it. |
 | `results_branch` | `main` | Branch the results are committed to. |
@@ -268,16 +284,18 @@ and `upload`; scheduled runs use the full suite, `main`, no debug, and upload.
 
 ## Files on the runner machine
 
-| Path | Notes |
-| --- | --- |
-| `~/.nwb_benchmarks/results/`, `machines/`, `environments/` | Written by `nwb_benchmarks`. The workflow only moves out the result files it produced; machine and environment files are copied. |
-| `~/.nwb_benchmarks/runner/pending/` | Files waiting for upload. Non-empty after a failed upload; the next run uploads them. |
-| `~/.nwb_benchmarks/runner/uploaded/` | Archive of uploaded files. Safe to delete at any time. |
-| `~/.asv-machine.json`, `~/.nwb_benchmarks/config.json`, the cache directory | Created by `asv` and `nwb_benchmarks`. |
-| `<runner>/_work/nwb-benchmarks-runner/nwb-benchmarks-runner/nwb-benchmarks` | The clone; removed at the end of every job. |
-| conda environment `nwb_benchmarks_runner` | Removed at the end of every job unless `keep_conda_env: true`. |
+Everything lives under `<runner>/_work/_nwb_benchmarks/` (a sibling of the runner's own `_temp` and `_tool`
+folders); the runner user's real home directory is never written to.
 
-Result files on disk are owned by the runner's user even after a sudo run; the workflow restores ownership itself.
+| Path under `_work/_nwb_benchmarks/` | Notes |
+| --- | --- |
+| `home/` | `HOME` for every job step. Holds `.nwb_benchmarks/{results,machines,environments,logs}` written by the suite, `.nwb_benchmarks/runner/pending/` (files waiting for upload; non-empty after a failed upload, the next run uploads them) and `.nwb_benchmarks/runner/uploaded/` (archive, safe to delete), the download cache `.cache/nwb_benchmarks/`, `.asv-machine.json`, and conda's `.conda/`. |
+| `miniforge3/` | conda, installed by the Set up runner workflow. Benchmark environments are created inside it and removed at the end of every job unless `keep_conda_env: true`. |
+| `tools/Wireshark.app/` | macOS only: Wireshark copied by the Set up runner workflow; its `tshark` is used automatically. |
+
+The clone of `nwb-benchmarks` lives in the job workspace (`_work/nwb-benchmarks-runner/.../nwb-benchmarks`) and is
+removed at the end of every job. Result files stay owned by the runner's user even after a sudo run; the workflow
+restores ownership of the whole state directory itself.
 
 ## Operational notes
 
@@ -317,5 +335,5 @@ Result files on disk are owned by the runner's user even after a sudo run; the w
 | Push rejected with 403 / authentication failed | The token expired or its owner lacks write access to `results_repository`. Replace the secret. |
 | Network tracking benchmarks skipped or failing | Install tshark or set `tshark_path`; set `network_interface`; grant passwordless sudo (macOS/Linux). |
 | `Passwordless sudo is not available` warning | Pick one of the options under "Root and sudo", or set `use_sudo: false` to accept skipping the network tracking benchmarks. |
-| `Permission denied` on `~/.nwb_benchmarks` or `~/.asv-machine.json` | Leftovers from an interrupted sudo run: `sudo chown -R "$(id -un)" ~/.nwb_benchmarks ~/.asv-machine.json`. |
+| `Permission denied` under `_work/_nwb_benchmarks` | Leftovers from an interrupted sudo run: `sudo chown -R "$(id -un)" <runner>/_work/_nwb_benchmarks`. |
 | `conda env create` fails | Check free disk space and `conda clean --all`; the environment file pins Python and uses `pip` for most packages, so network access to PyPI is required. |

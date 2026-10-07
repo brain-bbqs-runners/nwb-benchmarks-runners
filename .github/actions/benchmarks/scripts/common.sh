@@ -34,8 +34,28 @@ normalize_bool() {
   esac
 }
 
+# Everything the runner keeps between jobs lives in one directory under the runner's
+# _work folder (a sibling of _temp and _tool), never in the real home directory:
+#
+#   <runner>/_work/_nwb_benchmarks/home        HOME for every step: ~/.nwb_benchmarks, caches, ~/.asv-machine.json
+#   <runner>/_work/_nwb_benchmarks/miniforge3  conda installed by the Set up runner workflow
+#   <runner>/_work/_nwb_benchmarks/tools       Wireshark.app (macOS), copied by that workflow for its tshark
+#
+# NWB_BENCHMARKS_STATE_DIR overrides the location. Outside a runner (local testing) it
+# falls back to ~/.nwb_benchmarks_runner.
+state_dir() {
+  if [ -n "${NWB_BENCHMARKS_STATE_DIR:-}" ]; then
+    printf '%s\n' "$NWB_BENCHMARKS_STATE_DIR"
+  elif [ -n "${RUNNER_WORKSPACE:-}" ]; then
+    printf '%s\n' "$(dirname "$RUNNER_WORKSPACE")/_nwb_benchmarks"
+  else
+    printf '%s\n' "$HOME/.nwb_benchmarks_runner"
+  fi
+}
+
 # Prints the root directory of the conda installation to use.
-# Honors CONDA_ROOT, then `conda` on PATH, then common installation locations.
+# Honors CONDA_ROOT, then the installation under the state directory, then `conda` on PATH,
+# then common installation locations.
 find_conda_root() {
   if [ -n "${CONDA_ROOT:-}" ]; then
     if [ -f "$CONDA_ROOT/etc/profile.d/conda.sh" ]; then
@@ -43,6 +63,13 @@ find_conda_root() {
       return 0
     fi
     die "CONDA_ROOT is set to '$CONDA_ROOT' but '$CONDA_ROOT/etc/profile.d/conda.sh' does not exist."
+  fi
+
+  local local_root
+  local_root="$(state_dir)/miniforge3"
+  if [ -f "$local_root/etc/profile.d/conda.sh" ]; then
+    printf '%s\n' "$local_root"
+    return 0
   fi
 
   if command -v conda > /dev/null 2>&1; then
@@ -66,6 +93,26 @@ find_conda_root() {
     "$HOME/AppData/Local/miniforge3" "$HOME/AppData/Local/miniconda3" \
     /c/ProgramData/miniforge3 /c/ProgramData/miniconda3 /c/ProgramData/Anaconda3; do
     if [ -f "$candidate/etc/profile.d/conda.sh" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Prints the tshark executable to use: TSHARK_PATH, then the tools environment under the
+# state directory, then `tshark` on PATH, then common install locations.
+find_tshark() {
+  if [ -n "${TSHARK_PATH:-}" ]; then
+    printf '%s\n' "$TSHARK_PATH"
+    return 0
+  fi
+  local candidate
+  for candidate in "$(state_dir)/tools/Wireshark.app/Contents/MacOS/tshark" "$(state_dir)/tools/bin/tshark" \
+    "$(command -v tshark 2> /dev/null || true)" \
+    /opt/homebrew/bin/tshark /usr/local/bin/tshark /Applications/Wireshark.app/Contents/MacOS/tshark \
+    /usr/bin/tshark "/c/Program Files/Wireshark/tshark.exe"; do
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
       printf '%s\n' "$candidate"
       return 0
     fi
@@ -98,7 +145,7 @@ list_conda_env_names() {
 
 # Paths a benchmark run writes to. Used to repair ownership after running with sudo.
 benchmark_state_paths() {
-  printf '%s\n' "$HOME/.nwb_benchmarks" "$HOME/.asv-machine.json" "$HOME/.conda" "$HOME/.cache/nwb_benchmarks"
+  printf '%s\n' "$(state_dir)" "$HOME/.nwb_benchmarks" "$HOME/.asv-machine.json" "$HOME/.conda" "$HOME/.cache/nwb_benchmarks"
   if [ -n "${NWB_BENCHMARKS_CACHE_DIRECTORY:-}" ]; then
     printf '%s\n' "$NWB_BENCHMARKS_CACHE_DIRECTORY"
   fi

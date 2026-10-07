@@ -54,7 +54,7 @@ on:
 
       # --- Machine configuration (all optional) -----------------------------------------
       conda_root:
-        description: Root of the conda installation (the directory containing etc/profile.d/conda.sh). Auto-detected when empty.
+        description: Root of the conda installation (the directory containing etc/profile.d/conda.sh). When empty, the installation under the runner's _work folder, then `conda` on PATH, then common locations are tried.
         required: false
         type: string
         default: ""
@@ -69,7 +69,7 @@ on:
         type: string
         default: ""
       tshark_path:
-        description: Absolute path of the tshark executable. `tshark` on PATH when empty.
+        description: Absolute path of the tshark executable. When empty, the Wireshark copy under the runner's _work folder, then `tshark` on PATH, then common locations are tried.
         required: false
         type: string
         default: ""
@@ -79,7 +79,7 @@ on:
         type: string
         default: auto
       cache_directory:
-        description: Directory for the suite's downloads and temporary files (`nwb_benchmarks config_set_cache`). Default when empty.
+        description: Directory for the suite's downloads and temporary files (`nwb_benchmarks config_set_cache`). Under the runner's _work folder when empty.
         required: false
         type: string
         default: ""

@@ -2,10 +2,10 @@
 #
 # 1. Copy this file to .github/workflows/runner-<label>.yml
 # 2. Replace every RUNNER_LABEL with the label you gave the self-hosted runner
-#    (lowercase letters, digits, and dashes; e.g. `jane-linux-workstation`).
+#    (lowercase letters, digits, dashes, and underscores; e.g. `lbl_laptop`).
 # 3. Replace RUNNER_SECRET_NAME with the name of the repository secret that holds this
 #    runner's upload token. Convention: RESULTS_UPLOAD_TOKEN_ followed by the label in
-#    uppercase with dashes turned into underscores (e.g. RESULTS_UPLOAD_TOKEN_JANE_LINUX_WORKSTATION).
+#    uppercase with dashes turned into underscores (e.g. RESULTS_UPLOAD_TOKEN_LBL_LAPTOP).
 # 4. Pick a cron schedule (UTC). Consider a different hour than the other runners if
 #    several machines share a network.
 # 5. Uncomment and fill in the machine configuration your machine needs (often nothing).
@@ -53,7 +53,7 @@ jobs:
       runner: RUNNER_LABEL
 
       # --- Machine configuration (all optional) -----------------------------------------
-      # conda_root: /home/jane/miniforge3                 # auto-detected when omitted
+      # conda_root: /opt/miniforge3                       # only for a conda outside <runner>/_work
       # network_interface: eth0                           # default-route interface when omitted
       # tshark_path: /usr/bin/tshark                      # `tshark` on PATH when omitted
       # use_sudo: auto                                    # auto | true | false
