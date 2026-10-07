@@ -21,7 +21,6 @@ Each contributor registers one or more of their own machines as self-hosted runn
 - [Files on the runner machine](#files-on-the-runner-machine)
 - [Operational notes](#operational-notes)
 - [Repository checks](#repository-checks)
-- [Security](#security)
 - [Troubleshooting](#troubleshooting)
 
 ## How it works
@@ -40,6 +39,7 @@ templates/runner-workflow.yml   copy this file to add a runner
 .pre-commit-config.yaml         formatting and hygiene hooks (`pre-commit run --all-files`)
 scripts/check_sentence_per_line.py   hook that puts each Markdown sentence on its own line
 docs/development.md             how the workflow, the action and the files on the runner fit together
+SECURITY.md                     what runs where, with which privileges and tokens
 ```
 
 A runner is described by exactly two things:
@@ -252,12 +252,6 @@ Result files stay owned by the runner's user even after a sudo run; the workflow
   [nwb-benchmarks-paper](https://github.com/NeurodataWithoutBorders/nwb-benchmarks-paper), from which the `.pre-commit-config.yaml` and the `sentence-per-line` hook are taken. A list item may hold several sentences on its line.
 - Install [pre-commit](https://pre-commit.com) and run `pre-commit run --all-files` before pushing; the `pre-commit` workflow runs the same hooks on every pull request. The sentence hook rewrites files and reports a failure the first time so the changes can be reviewed; run it again to confirm.
 - `lint.yml` additionally runs actionlint and shellcheck on the workflows and scripts.
-
-## Security
-
-- Self-hosted runners on a public repository: only `schedule` and `workflow_dispatch` trigger jobs on them, and `workflow_dispatch` is limited to people with write access. Never add `pull_request` or `push` triggers to a workflow that uses `self-hosted`. The lint workflow runs on GitHub-hosted runners only.
-- Passwordless sudo (or a root runner) gives the benchmark suite root on the machine. Use a dedicated user or machine, and keep the suite pinned to `main` of the upstream repository (the default) unless you are testing your own branch.
-- Tokens are scoped to a single repository and stored only as repository secrets, one per runner. Each per-runner workflow passes its own secret explicitly (no `secrets: inherit`), so a machine never receives another runner's token. Rotate a token by replacing the secret; nothing on the machine has to change.
 
 ## Troubleshooting
 
