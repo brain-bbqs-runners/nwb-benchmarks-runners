@@ -48,11 +48,10 @@ templates/runner-workflow.yml   copy this file to add a runner
 
 A runner is described by exactly two things:
 
-- **one workflow file** `.github/workflows/runner-<label>.yml`, which names the runner label (e.g. `lbl-mac`,
-  `jane-linux-workstation`), picks the schedule, and sets any machine-specific inputs (conda location, network
-  interface, ...);
+- **one workflow file** `.github/workflows/runner-<label>.yml`, which names the runner label (e.g. `lbl_laptop`),
+  picks the schedule, and sets any machine-specific inputs (conda location, network interface, ...);
 - **one repository secret** `RESULTS_UPLOAD_TOKEN_<LABEL>` (the label in uppercase, dashes turned into
-  underscores, e.g. `RESULTS_UPLOAD_TOKEN_LBL_MAC`), which the workflow file passes to the reusable workflow as
+  underscores, e.g. `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`), which the workflow file passes to the reusable workflow as
   `RESULTS_UPLOAD_TOKEN`. Secrets are passed explicitly, never inherited, so a job only ever receives the token
   of the runner it runs on.
 
@@ -68,8 +67,8 @@ its own from any workflow, in this repository or another one:
 steps:
   - uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
     with:
-      runner-label: my-machine
-      results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN_MY_MACHINE }}
+      runner-label: lbl_laptop
+      results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN_LBL_LAPTOP }}
       # same options as the workflow inputs below, with dashes instead of underscores
 ```
 
@@ -109,10 +108,10 @@ Every job on a runner:
 
 ### 2. Register the self-hosted runner
 
-First pick the **runner label**: lowercase letters, digits, and dashes, e.g. `ackermann` or `lbl-mac`. It is
+First pick the **runner label**: lowercase letters, digits, dashes, and underscores, e.g. `lbl_laptop`. It is
 the one string that ties everything together: the workflow file is `runner-<label>.yml` and selects the
-machine with `runs-on: [self-hosted, <label>]`, and the secret is `RESULTS_UPLOAD_TOKEN_<LABEL>`. Labels
-currently in use: `lbl-mac` (the official LBL Mac) and `ackermann`.
+machine with `runs-on: [self-hosted, <label>]`, and the secret is `RESULTS_UPLOAD_TOKEN_<LABEL>`. The
+existing `runner-*.yml` files in `.github/workflows/` show real ones.
 
 Then, in the repository, open **Settings → Actions → Runners → New self-hosted runner**, choose the machine's
 OS and architecture, and run the download and `./config.sh --url ... --token ...` commands GitHub shows, as the
@@ -122,7 +121,7 @@ user who owns the conda installation (not root; see "Root and sudo" below). `con
 | --- | --- |
 | `Enter the name of the runner group` | Press Enter (`Default`). |
 | `Enter the name of runner` | Anything descriptive, e.g. the hostname, or the label itself. The name only shows up in the Runners list and in job logs; it does not select jobs. |
-| `Enter any additional labels` | **The runner label**, e.g. `ackermann`. GitHub adds `self-hosted`, the OS (`Linux`, `macOS`, `Windows`), and the architecture (`X64`, `ARM64`) automatically; keep those. |
+| `Enter any additional labels` | **The runner label**, e.g. `lbl_laptop`. GitHub adds `self-hosted`, the OS (`Linux`, `macOS`, `Windows`), and the architecture (`X64`, `ARM64`) automatically; keep those. |
 | `Enter name of work folder` | Press Enter (`_work`). |
 
 Labels can be changed later without re-registering: **Settings → Actions → Runners → (runner) → Labels**.
@@ -154,7 +153,7 @@ A classic token with the `public_repo` scope also works.
 
 A repository administrator adds the token under **Settings → Secrets and variables → Actions → New repository
 secret**, named `RESULTS_UPLOAD_TOKEN_<LABEL>`: the runner label in uppercase with dashes turned into
-underscores (`lbl-mac` → `RESULTS_UPLOAD_TOKEN_LBL_MAC`). One secret per runner; the token can be the
+underscores (`lbl_laptop` → `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`). One secret per runner; the token can be the
 contributor's own or one the administrator creates for that machine. Rotating a token means replacing this one
 secret; nothing on the machine changes.
 
