@@ -3,6 +3,8 @@
 #
 #   - installs Miniforge when no conda is found and, on macOS, Wireshark.app (for tshark)
 #     when tshark is not found, both under <runner>/_work/_nwb_benchmarks (nothing global),
+#   - with root (passwordless sudo or a root runner): installs tshark on Linux and, when asked,
+#     sets up packet capture without root; otherwise prints the commands to run once,
 #   - reports git, a C compiler, conda, tshark, passwordless sudo, the default network interface, and disk,
 #   - builds the benchmark conda environment once to prove the toolchain works, then removes it,
 #   - writes a summary with the lines to add to the runner's workflow file.
@@ -23,10 +25,15 @@ on:
         type: boolean
         default: true
       install_tshark:
-        description: macOS only. Copy Wireshark.app (which contains tshark) under _work when tshark is not found
+        description: Install tshark when it is not found. macOS copies Wireshark.app under _work; Linux uses the distribution's package manager (needs passwordless sudo or a root runner, otherwise the summary prints the command)
         required: false
         type: boolean
         default: true
+      capture_without_root:
+        description: Linux only. Give dumpcap capture capabilities and add the runner's user to the wireshark group so the network tracking benchmarks run without sudo (needs root once; afterwards set use_sudo false and restart the runner service)
+        required: false
+        type: boolean
+        default: false
       wireshark_dmg_url:
         description: macOS only. Override the Wireshark disk image URL (default is Wireshark's "Latest" link for this architecture)
         required: false
@@ -77,6 +84,7 @@ jobs:
         env:
           INSTALL_CONDA: ${{ inputs.install_conda }}
           INSTALL_TSHARK: ${{ inputs.install_tshark }}
+          CAPTURE_WITHOUT_ROOT: ${{ inputs.capture_without_root }}
           WIRESHARK_DMG_URL: ${{ inputs.wireshark_dmg_url }}
         run: bash .github/actions/benchmarks/scripts/setup_requirements.sh
 

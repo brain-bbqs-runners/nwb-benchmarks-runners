@@ -107,10 +107,10 @@ Every job on a runner:
 - conda: the **Set up runner** workflow (below) installs [Miniforge](https://github.com/conda-forge/miniforge)
   under `<runner>/_work/_nwb_benchmarks/miniforge3`. A conda already on the machine is deliberately ignored,
   because its environments would live outside `_work`; to use one anyway, point the `conda_root` input at it.
-- [tshark](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks. On macOS
-  the Set up runner workflow copies `Wireshark.app` under `_work`, where its `tshark` is found automatically.
-  Linux has no portable build, so install the distribution package yourself (`sudo apt-get install tshark`,
-  `sudo dnf install wireshark-cli`); on Windows install Wireshark and set `tshark_path`.
+- [tshark](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks. The
+  **Set up runner** workflow installs it: on macOS it copies `Wireshark.app` under `_work`, where its `tshark`
+  is found automatically; on Linux it installs the distribution package when the runner's user has passwordless
+  sudo, and otherwise prints the command. On Windows install Wireshark and set `tshark_path`.
 - Root for the network tracking benchmarks, in one of the forms described under "Root and sudo" below
   (passwordless sudo is the usual choice). Without it the network tracking benchmarks are skipped or fail while
   the timing benchmarks still run.
@@ -119,10 +119,12 @@ Every job on a runner:
 
 Most of this can be done for you: after registering the runner (step 2), run **Actions → Set up runner → Run
 workflow** with the runner's label. It installs Miniforge when no conda is found and, on macOS, Wireshark when
-tshark is missing, both under `<runner>/_work/_nwb_benchmarks` and without sudo; reports the C compiler, sudo,
-the default network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works;
-and ends with the exact lines to add to the runner's workflow file, if any. Re-run it any time to repair a
-machine; it only installs what is missing.
+tshark is missing, both under `<runner>/_work/_nwb_benchmarks` and without sudo. With root (passwordless sudo
+for the runner's user, or a root runner) it also installs tshark on Linux and, with `capture_without_root`
+ticked, sets up packet capture without root (see "Root and sudo"). It reports the C compiler, sudo, the default
+network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works;
+and ends with a copy-paste block of anything that still needs root on the machine plus the lines to add to
+the runner's workflow file, if any. Re-run it any time to repair a machine; it only installs what is missing.
 
 ### 2. Register the self-hosted runner
 
@@ -200,7 +202,9 @@ the file is merged.
 The network tracking benchmarks capture packets with tshark and map them to processes with
 `psutil.net_connections()`, which needs root on macOS; packet capture needs root or a capture capability on
 every platform. The timing benchmarks need neither. There are three ways to provide root, plus the option of
-skipping those benchmarks.
+skipping those benchmarks. The **Set up runner** workflow tells you where the machine stands: its summary
+prints the exact commands for whichever of these still needs a person at the machine, and with
+`capture_without_root` ticked it performs the third option itself once it has root.
 
 **Passwordless sudo for the runner's user (default, works on macOS and Linux).** The action runs only the
 `nwb_benchmarks run` command under `sudo -E` and gives the files it wrote back to the runner's user afterwards;
@@ -232,7 +236,9 @@ wrap the command a second time; state lives under `/root/.nwb_benchmarks`. On ma
 per-user LaunchAgent, so a root runner is not supported by the installer; use passwordless sudo there.
 
 **No root at all (Linux only).** Give the capture helper the capabilities it needs and let the runner's user
-use it:
+use it. The **Set up runner** workflow does this when run with `capture_without_root` ticked while the
+runner's user still has passwordless sudo (grant it, run the workflow, then remove the sudoers line if you
+want); by hand it is:
 
 ```
 sudo setcap cap_net_raw,cap_net_admin+eip "$(command -v dumpcap)"
