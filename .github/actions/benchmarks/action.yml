@@ -50,7 +50,7 @@ inputs:
 
   # --- Machine configuration (all optional) -------------------------------------------
   conda-root:
-    description: Root of the conda installation (the directory containing etc/profile.d/conda.sh). When empty, the installation under the runner's _work folder, then `conda` on PATH, then common locations are tried.
+    description: Explicit conda installation to use (the directory containing etc/profile.d/conda.sh). Leave empty to use the Miniforge under the runner's _work folder installed by the Set up runner workflow; a conda on PATH is never used.
     required: false
     default: ""
   conda-env-name:

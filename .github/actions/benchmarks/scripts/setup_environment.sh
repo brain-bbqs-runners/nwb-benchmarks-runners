@@ -26,7 +26,7 @@ ENVIRONMENT_FILE="$CLONE_DIR/environments/nwb_benchmarks.yaml"
 [ -f "$ENVIRONMENT_FILE" ] || die "Environment file not found: $ENVIRONMENT_FILE"
 
 if ! CONDA_ROOT="$(find_conda_root)"; then
-  die "No conda installation was found. Install Miniforge or Miniconda for the user running the GitHub Actions runner, or set the 'conda_root' input in this runner's workflow file to the installation directory."
+  die "No conda installation under $(state_dir)/miniforge3. Run the 'Set up runner' workflow for this runner to install Miniforge there, or set the 'conda_root' input in this runner's workflow file to use an installation elsewhere."
 fi
 export CONDA_ROOT
 log "conda installation: $CONDA_ROOT"

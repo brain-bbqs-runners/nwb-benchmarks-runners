@@ -53,7 +53,7 @@ jobs:
       runner: RUNNER_LABEL
 
       # --- Machine configuration (all optional) -----------------------------------------
-      # conda_root: /opt/miniforge3                       # only for a conda outside <runner>/_work
+      # conda_root: /opt/miniforge3                       # only to use a conda outside <runner>/_work
       # network_interface: eth0                           # default-route interface when omitted
       # tshark_path: /usr/bin/tshark                      # `tshark` on PATH when omitted
       # use_sudo: auto                                    # auto | true | false

@@ -102,8 +102,8 @@ Every job on a runner:
   network tracking benchmarks, which need root.
 - `git`.
 - conda: the **Set up runner** workflow (below) installs [Miniforge](https://github.com/conda-forge/miniforge)
-  under `<runner>/_work/_nwb_benchmarks/miniforge3`. An existing installation on `PATH` or in a common location
-  is detected too; anything else needs the `conda_root` input.
+  under `<runner>/_work/_nwb_benchmarks/miniforge3`. A conda already on the machine is deliberately ignored,
+  because its environments would live outside `_work`; to use one anyway, point the `conda_root` input at it.
 - [tshark](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks. On macOS
   the Set up runner workflow copies `Wireshark.app` under `_work`, where its `tshark` is found automatically.
   Linux has no portable build, so install the distribution package yourself (`sudo apt-get install tshark`,
@@ -269,7 +269,7 @@ plus `runner-label` and `results-upload-token`; `timeout_minutes` is job-level a
 | `debug` | `false` | `--debug`: one repeat, verbose output, nothing staged or uploaded. |
 | `upload` | `true` | Set to `false` to run without uploading. |
 | `timeout_minutes` | `720` | Job timeout. |
-| `conda_root` | auto-detected | Root of the conda installation (the directory containing `etc/profile.d/conda.sh`). Searched: under `_work`, on `PATH`, common locations. Set it when the job logs "No conda installation was found". |
+| `conda_root` | the Miniforge under `_work` | Explicit conda installation to use instead (the directory containing `etc/profile.d/conda.sh`). A conda on `PATH` is never used. |
 | `conda_env_name` | `nwb_benchmarks_runner` | Name of the conda environment created at the start and removed at the end of every job. |
 | `network_interface` | interface of the default route | Interface for network tracking (`en0`, `eth0`, `Ethernet`, ...). Set it if auto-detection picks the wrong one or fails. |
 | `tshark_path` | auto-detected | Absolute path of the tshark executable. Searched: the Wireshark copy under `_work`, `PATH`, common locations. Required on Windows. |
@@ -290,7 +290,7 @@ folders); the runner user's real home directory is never written to.
 | Path under `_work/_nwb_benchmarks/` | Notes |
 | --- | --- |
 | `home/` | `HOME` for every job step. Holds `.nwb_benchmarks/{results,machines,environments,logs}` written by the suite, `.nwb_benchmarks/runner/pending/` (files waiting for upload; non-empty after a failed upload, the next run uploads them) and `.nwb_benchmarks/runner/uploaded/` (archive, safe to delete), the download cache `.cache/nwb_benchmarks/`, `.asv-machine.json`, and conda's `.conda/`. |
-| `miniforge3/` | conda, installed by the Set up runner workflow. Benchmark environments are created inside it and removed at the end of every job unless `keep_conda_env: true`. |
+| `miniforge3/` | conda, installed by the Set up runner workflow; the only conda the jobs use unless `conda_root` says otherwise. Benchmark environments are created inside it and removed at the end of every job unless `keep_conda_env: true`. |
 | `tools/Wireshark.app/` | macOS only: Wireshark copied by the Set up runner workflow; its `tshark` is used automatically. |
 
 The clone of `nwb-benchmarks` lives in the job workspace (`_work/nwb-benchmarks-runner/.../nwb-benchmarks`) and is
@@ -330,7 +330,7 @@ restores ownership of the whole state directory itself.
 | Symptom | What to do |
 | --- | --- |
 | Job stays "Waiting for a runner to pick up this job" | The runner is offline or its label differs from the workflow's `runner` value. Check **Settings → Actions → Runners** and `./svc.sh status` on the machine. |
-| `No conda installation was found` | Set the `conda_root` input in the runner's workflow file. |
+| `No conda installation under .../_work/_nwb_benchmarks/miniforge3` | Run the **Set up runner** workflow for this runner, or set the `conda_root` input to use an installation elsewhere. |
 | `No upload token was passed` / `RESULTS_UPLOAD_TOKEN is empty` | The repository secret named in the workflow file's `secrets:` block does not exist (check the spelling: uppercase, underscores), or the workflow file does not pass it. |
 | Push rejected with 403 / authentication failed | The token expired or its owner lacks write access to `results_repository`. Replace the secret. |
 | Network tracking benchmarks skipped or failing | Install tshark or set `tshark_path`; set `network_interface`; grant passwordless sudo (macOS/Linux). |

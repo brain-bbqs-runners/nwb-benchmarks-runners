@@ -2,7 +2,8 @@
 # One-time (or any-time) setup of a self-hosted runner. Everything it installs lives under
 # the runner's _work folder (see state_dir in common.sh); nothing is installed globally:
 #
-#   - Miniforge into <state>/miniforge3 when no conda installation is found
+#   - Miniforge into <state>/miniforge3 when none is there yet (a conda elsewhere on the
+#     machine is ignored on purpose: its environments would live outside _work)
 #   - macOS: Wireshark.app, which contains tshark, into <state>/tools when tshark is not found
 #   - Linux and Windows: tshark cannot be installed without touching the system, so the
 #     script only reports what to do
@@ -14,7 +15,7 @@
 # Used by .github/workflows/setup-runner.yml, not by the benchmarks action.
 #
 # Inputs (environment variables):
-#   INSTALL_CONDA       "true" (default) installs Miniforge when no conda installation is found
+#   INSTALL_CONDA       "true" (default) installs Miniforge under _work when it is not there yet
 #   INSTALL_TSHARK      "true" (default) installs tshark on macOS when it is not found
 #   WIRESHARK_DMG_URL   override for the macOS disk image URL (default: Wireshark's "Latest" link)
 #   RUNNER_LABEL        label of this runner, for the summary
@@ -57,16 +58,19 @@ group_end
 # --- conda --------------------------------------------------------------------------
 group_start "conda"
 conda_root=""
+if other_conda="$(command -v conda 2> /dev/null)"; then
+  log "Ignoring the conda on PATH ($other_conda): its environments would live outside _work."
+fi
 if conda_root="$(find_conda_root 2> /dev/null)"; then
   log "Found conda installation at $conda_root"
 elif [ "$INSTALL_CONDA" = true ]; then
   if is_windows; then
-    die "No conda installation found. Automatic installation is not supported on Windows; install Miniforge (https://github.com/conda-forge/miniforge) and re-run."
+    die "No conda installation under $STATE_DIR/miniforge3. Automatic installation is not supported on Windows; install Miniforge (https://github.com/conda-forge/miniforge) there and re-run."
   fi
   conda_root="$STATE_DIR/miniforge3"
   installer="Miniforge3-$(uname -s)-$(uname -m).sh"
   url="https://github.com/conda-forge/miniforge/releases/latest/download/$installer"
-  log "No conda installation found; installing Miniforge into $conda_root from $url"
+  log "No conda installation under _work; installing Miniforge into $conda_root from $url"
   curl -fsSL -o "$TEMP_DIR/$installer" "$url"
   # -b: batch (accept the license, no prompts); -u: update an existing directory; -p: prefix
   bash "$TEMP_DIR/$installer" -b -u -p "$conda_root"
@@ -74,7 +78,7 @@ elif [ "$INSTALL_CONDA" = true ]; then
   [ -f "$conda_root/etc/profile.d/conda.sh" ] || die "The Miniforge installer finished but $conda_root/etc/profile.d/conda.sh is missing."
   note "Miniforge was installed into \`$conda_root\`; the benchmarks action finds it there by itself."
 else
-  warn "No conda installation found and install_conda is false."
+  warn "No conda installation under $STATE_DIR/miniforge3 and install_conda is false."
 fi
 
 CONDA_STATUS="not found"
@@ -82,10 +86,9 @@ if [ -n "$conda_root" ]; then
   load_conda "$conda_root"
   CONDA_STATUS="$(conda --version) at \`$conda_root\`"
   log "$CONDA_STATUS"
-  # The action finds conda under the state directory, on PATH, and in common locations;
-  # anything else needs the conda_root input.
-  if ! detected="$(CONDA_ROOT="" find_conda_root 2> /dev/null)" || [ "$detected" != "$conda_root" ]; then
-    note "conda lives in a location the action does not search. Add \`conda_root: $conda_root\` to the runner's workflow file."
+  # The action only looks under the state directory unless conda_root is set explicitly.
+  if [ "$conda_root" != "$STATE_DIR/miniforge3" ]; then
+    note "conda is outside _work; keep \`conda_root: $conda_root\` in the runner's workflow file (set it if it is not there yet)."
   fi
 fi
 group_end
