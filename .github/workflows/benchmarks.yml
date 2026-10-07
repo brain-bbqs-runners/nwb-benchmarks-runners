@@ -91,27 +91,12 @@ on:
 
       # --- Upload configuration ---------------------------------------------------------
       results_repository:
-        description: Repository (owner/name) the token pushes to. In `pull-request` mode, the contributor's fork.
+        description: Repository (owner/name) the results are committed to. The token needs write access to it.
         required: false
         type: string
         default: NeurodataWithoutBorders/nwb-benchmarks-results
       results_branch:
-        description: Branch pushed to in `push` mode.
-        required: false
-        type: string
-        default: main
-      upload_mode:
-        description: "`push` commits straight to results_branch; `pull-request` pushes a branch and opens a pull request against upstream_repository."
-        required: false
-        type: string
-        default: push
-      upstream_repository:
-        description: "`pull-request` mode: repository that receives the pull request."
-        required: false
-        type: string
-        default: NeurodataWithoutBorders/nwb-benchmarks-results
-      upstream_branch:
-        description: "`pull-request` mode: base branch of the pull request."
+        description: Branch the results are committed to.
         required: false
         type: string
         default: main
@@ -163,6 +148,3 @@ jobs:
           keep-conda-env: ${{ inputs.keep_conda_env }}
           results-repository: ${{ inputs.results_repository }}
           results-branch: ${{ inputs.results_branch }}
-          upload-mode: ${{ inputs.upload_mode }}
-          upstream-repository: ${{ inputs.upstream_repository }}
-          upstream-branch: ${{ inputs.upstream_branch }}

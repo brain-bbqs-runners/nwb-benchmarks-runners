@@ -80,23 +80,11 @@ inputs:
 
   # --- Upload configuration -----------------------------------------------------------
   results-repository:
-    description: Repository (owner/name) the token pushes to. In pull-request mode, the contributor's fork.
+    description: Repository (owner/name) the results are committed to. The token needs write access to it.
     required: false
     default: NeurodataWithoutBorders/nwb-benchmarks-results
   results-branch:
-    description: Branch pushed to in push mode.
-    required: false
-    default: main
-  upload-mode:
-    description: '"push" commits straight to results-branch; "pull-request" pushes a branch and opens a pull request against upstream-repository.'
-    required: false
-    default: push
-  upstream-repository:
-    description: Pull-request mode. Repository that receives the pull request.
-    required: false
-    default: NeurodataWithoutBorders/nwb-benchmarks-results
-  upstream-branch:
-    description: Pull-request mode. Base branch of the pull request.
+    description: Branch the results are committed to.
     required: false
     default: main
 
@@ -194,9 +182,6 @@ runs:
         RESULTS_UPLOAD_TOKEN: ${{ inputs.results-upload-token }}
         RESULTS_REPOSITORY: ${{ inputs.results-repository }}
         RESULTS_BRANCH: ${{ inputs.results-branch }}
-        RESULTS_UPLOAD_MODE: ${{ inputs.upload-mode }}
-        RESULTS_UPSTREAM_REPOSITORY: ${{ inputs.upstream-repository }}
-        RESULTS_UPSTREAM_BRANCH: ${{ inputs.upstream-branch }}
       run: bash "$GITHUB_ACTION_PATH/scripts/upload_results.sh"
 
     - name: Save console log and result files as a workflow artifact

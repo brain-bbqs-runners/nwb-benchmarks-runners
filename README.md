@@ -27,7 +27,6 @@ removes the old uploader from the suite.)
 - [Configuration reference](#configuration-reference)
   - [Secret (one repository secret per runner)](#secret-one-repository-secret-per-runner)
   - [Workflow inputs](#workflow-inputs)
-- [Upload modes](#upload-modes)
 - [Files on the runner machine](#files-on-the-runner-machine)
 - [Operational notes](#operational-notes)
 - [Security](#security)
@@ -141,9 +140,9 @@ Only `schedule` and `workflow_dispatch` events ever reach the self-hosted runner
 
 Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with:
 
-- **Repository access**: only the repository you will push to (`NeurodataWithoutBorders/nwb-benchmarks-results`
-  if you have write access there, otherwise your fork of it; see "Upload modes").
-- **Permissions**: *Contents: Read and write*. Add *Pull requests: Read and write* for `pull-request` mode.
+- **Repository access**: only the results repository, `NeurodataWithoutBorders/nwb-benchmarks-results`. The
+  token's owner needs write access to it, because results are committed straight to its `main` branch.
+- **Permissions**: *Contents: Read and write*. Nothing else.
 - An expiration you keep track of: when the token expires, uploads fail with an authentication error until you
   store a new one. Result files are never lost; they stay pending on the machine.
 
@@ -175,7 +174,7 @@ the file is merged.
    starts.
 2. Run it again without debug, optionally with a `benchmark_pattern` such as
    `time_remote_slicing.HDF5PyNWBRemfilePreloadedNoCacheContinuousSliceBenchmark.time_slice` to keep it short.
-   The job summary links to the commit (or pull request) in the results repository.
+   The job summary links to the commit in the results repository.
 
 ## Root and sudo
 
@@ -261,27 +260,11 @@ plus `runner-label` and `results-upload-token`; `timeout_minutes` is job-level a
 | `use_sudo` | `auto` | `auto` uses sudo when it works without a password; `true` requires it (job fails otherwise); `false` never uses it. |
 | `cache_directory` | `~/.cache/nwb_benchmarks` | Passed to `nwb_benchmarks config_set_cache`; put it on a large disk, the suite downloads whole NWB files. |
 | `keep_conda_env` | `false` | Keep the conda environment after the job for inspection. |
-| `results_repository` | `NeurodataWithoutBorders/nwb-benchmarks-results` | Repository the token pushes to. In `pull-request` mode, your fork. |
-| `results_branch` | `main` | Branch pushed to in `push` mode. |
-| `upload_mode` | `push` | `push` or `pull-request` (see below). |
-| `upstream_repository` | `NeurodataWithoutBorders/nwb-benchmarks-results` | `pull-request` mode: repository that receives the pull request. |
-| `upstream_branch` | `main` | `pull-request` mode: base branch of the pull request. |
+| `results_repository` | `NeurodataWithoutBorders/nwb-benchmarks-results` | Repository the results are committed to; the token needs write access to it. |
+| `results_branch` | `main` | Branch the results are committed to. |
 
 The manual trigger form of each per-runner workflow exposes `benchmark_pattern`, `nwb_benchmarks_ref`, `debug`,
 and `upload`; scheduled runs use the full suite, `main`, no debug, and upload.
-
-## Upload modes
-
-- **`push`** (default): results are committed straight to `main` of the central results repository, like the
-  retired server did. Requires a token of an account with write access to that repository. Simultaneous uploads
-  from several runners are safe: a rejected push is re-synced and retried, and file names are unique per run.
-- **`pull-request`**: for contributors without write access. Fork the results repository, set
-  `results_repository` to the fork and `upload_mode` to `pull-request` in the runner's workflow file, and give
-  the token *Contents* and *Pull requests* write access on the fork. Each run pushes a branch `results/<label>/<timestamp>` to the fork
-  and opens a pull request against the central repository for a maintainer to merge.
-
-Files already present in the target repository (same file name) are skipped in both modes, so retries never
-duplicate results.
 
 ## Files on the runner machine
 
@@ -331,7 +314,7 @@ Result files on disk are owned by the runner's user even after a sudo run; the w
 | Job stays "Waiting for a runner to pick up this job" | The runner is offline or its label differs from the workflow's `runner` value. Check **Settings → Actions → Runners** and `./svc.sh status` on the machine. |
 | `No conda installation was found` | Set the `conda_root` input in the runner's workflow file. |
 | `No upload token was passed` / `RESULTS_UPLOAD_TOKEN is empty` | The repository secret named in the workflow file's `secrets:` block does not exist (check the spelling: uppercase, underscores), or the workflow file does not pass it. |
-| Push rejected with 403 / authentication failed | The token expired or lacks write access to `RESULTS_REPOSITORY`. Replace it, or switch to `pull-request` mode with a fork. |
+| Push rejected with 403 / authentication failed | The token expired or its owner lacks write access to `results_repository`. Replace the secret. |
 | Network tracking benchmarks skipped or failing | Install tshark or set `tshark_path`; set `network_interface`; grant passwordless sudo (macOS/Linux). |
 | `Passwordless sudo is not available` warning | Pick one of the options under "Root and sudo", or set `use_sudo: false` to accept skipping the network tracking benchmarks. |
 | `Permission denied` on `~/.nwb_benchmarks` or `~/.asv-machine.json` | Leftovers from an interrupted sudo run: `sudo chown -R "$(id -un)" ~/.nwb_benchmarks ~/.asv-machine.json`. |

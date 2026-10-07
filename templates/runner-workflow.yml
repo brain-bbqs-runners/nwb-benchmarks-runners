@@ -59,9 +59,9 @@ jobs:
       # use_sudo: auto                                    # auto | true | false
       # cache_directory: /data/nwb_benchmarks_cache       # large downloads live here
 
-      # --- Upload configuration (defaults push straight to the central results repo) ----
-      # results_repository: jane/nwb-benchmarks-results   # your fork, for pull-request mode
-      # upload_mode: pull-request
+      # --- Upload configuration (defaults to the central results repository) ------------
+      # results_repository: <owner>/nwb-benchmarks-results   # e.g. a test repository
+      # results_branch: main
 
       # --- Run options, forwarded from the manual trigger form ------------------------
       # Scheduled runs never use debug mode and always upload.
