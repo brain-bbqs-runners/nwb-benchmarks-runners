@@ -13,6 +13,26 @@ post to has been retired; these workflows replace it, and
 [NeurodataWithoutBorders/nwb-benchmarks#198](https://github.com/NeurodataWithoutBorders/nwb-benchmarks/pull/198)
 removes the old uploader from the suite.)
 
+## Contents
+
+- [How it works](#how-it-works)
+- [Adding a runner](#adding-a-runner)
+  - [1. Prepare the machine](#1-prepare-the-machine)
+  - [2. Register the self-hosted runner](#2-register-the-self-hosted-runner)
+  - [3. Create the upload token](#3-create-the-upload-token)
+  - [4. Store the token as a repository secret](#4-store-the-token-as-a-repository-secret)
+  - [5. Add the per-runner workflow](#5-add-the-per-runner-workflow)
+  - [6. Test it](#6-test-it)
+- [Root and sudo](#root-and-sudo)
+- [Configuration reference](#configuration-reference)
+  - [Secret (one repository secret per runner)](#secret-one-repository-secret-per-runner)
+  - [Workflow inputs](#workflow-inputs)
+- [Upload modes](#upload-modes)
+- [Files on the runner machine](#files-on-the-runner-machine)
+- [Operational notes](#operational-notes)
+- [Security](#security)
+- [Troubleshooting](#troubleshooting)
+
 ## How it works
 
 ```
@@ -219,7 +239,9 @@ is present but cannot capture.
 | --- | --- |
 | `RESULTS_UPLOAD_TOKEN_<LABEL>` | Token with write access to `results_repository`. The runner's workflow file passes it as `RESULTS_UPLOAD_TOKEN`; it reaches git as a per-command HTTP header, is never written to disk on the runner, and is masked in logs. |
 
-### Inputs of the reusable workflow (set under `with:` in `runner-<label>.yml`)
+### Workflow inputs
+
+Set these under `with:` in `runner-<label>.yml`.
 
 The composite action takes the same inputs with dashes instead of underscores (`conda-root`, `use-sudo`, ...),
 plus `runner-label` and `results-upload-token`; `timeout_minutes` is job-level and exists only on the workflow.
