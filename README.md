@@ -2,8 +2,7 @@
 
 Scheduled runs of the [NWB Benchmarks](https://github.com/NeurodataWithoutBorders/nwb-benchmarks) suite on self-hosted GitHub Actions runners, with the results committed to [nwb-benchmarks-results](https://github.com/NeurodataWithoutBorders/nwb-benchmarks-results).
 
-Each contributor registers one or more of their own machines as self-hosted runners of this repository, gives every runner a label, and adds a small workflow file that decides when that runner benchmarks and how the machine is configured.
-Every runner uploads with its own token, stored as a separate repository secret, so many people can feed the central results repository without running a server and without any one token being shared between machines. (The PythonAnywhere upload server that `nwb_benchmarks run` used to post to has been retired; these workflows replace it, and [NeurodataWithoutBorders/nwb-benchmarks#198](https://github.com/NeurodataWithoutBorders/nwb-benchmarks/pull/198) removes the old uploader from the suite.)
+Each contributor registers one or more of their own machines as self-hosted runners of this repository, gives every runner a unique label, and registers a workflow file that determines when to run the benchmarks with a particular configuration.
 
 ## Contents
 
