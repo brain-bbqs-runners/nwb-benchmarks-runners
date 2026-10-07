@@ -1,4 +1,4 @@
-# NWB Benchmarks Runner
+# NWB Benchmarks (Runners)
 
 Scheduled runs of the [NWB Benchmarks](https://github.com/NeurodataWithoutBorders/nwb-benchmarks) suite on
 self-hosted GitHub Actions runners, with the results committed to
