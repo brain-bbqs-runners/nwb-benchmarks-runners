@@ -53,9 +53,10 @@ state_dir() {
   fi
 }
 
-# Prints the root directory of the conda installation to use.
-# Honors CONDA_ROOT, then the installation under the state directory, then `conda` on PATH,
-# then common installation locations.
+# Prints the root directory of the conda installation to use: CONDA_ROOT when set, else the
+# Miniforge under the state directory. A conda found on PATH or in the user's home is
+# deliberately ignored, because its environments would live outside _work; the Set up
+# runner workflow installs the one under _work.
 find_conda_root() {
   if [ -n "${CONDA_ROOT:-}" ]; then
     if [ -f "$CONDA_ROOT/etc/profile.d/conda.sh" ]; then
@@ -71,32 +72,6 @@ find_conda_root() {
     printf '%s\n' "$local_root"
     return 0
   fi
-
-  if command -v conda > /dev/null 2>&1; then
-    local base
-    if base="$(conda info --base 2> /dev/null)" && [ -f "$base/etc/profile.d/conda.sh" ]; then
-      printf '%s\n' "$base"
-      return 0
-    fi
-  fi
-
-  local candidate
-  for candidate in \
-    "$HOME/miniforge3" "$HOME/mambaforge" "$HOME/miniconda3" "$HOME/anaconda3" \
-    "$HOME/opt/miniconda3" "$HOME/opt/anaconda3" \
-    /opt/homebrew/Caskroom/miniforge/base /opt/homebrew/Caskroom/miniconda/base \
-    /opt/homebrew/Caskroom/mambaforge/base /opt/homebrew/Caskroom/anaconda/base \
-    /usr/local/Caskroom/miniforge/base /usr/local/Caskroom/miniconda/base \
-    /opt/miniforge3 /opt/miniconda3 /opt/anaconda3 /opt/conda \
-    /usr/local/miniforge3 /usr/local/miniconda3 /usr/local/anaconda3 \
-    "$HOME/Miniforge3" "$HOME/Miniconda3" "$HOME/Anaconda3" \
-    "$HOME/AppData/Local/miniforge3" "$HOME/AppData/Local/miniconda3" \
-    /c/ProgramData/miniforge3 /c/ProgramData/miniconda3 /c/ProgramData/Anaconda3; do
-    if [ -f "$candidate/etc/profile.d/conda.sh" ]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
   return 1
 }
 
