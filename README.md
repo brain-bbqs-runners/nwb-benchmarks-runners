@@ -101,6 +101,9 @@ Every job on a runner:
 - macOS or Linux. Windows is best effort: it needs Git for Windows (for `bash`) and cannot run the
   network tracking benchmarks, which need root.
 - `git`.
+- A C compiler (`gcc` or `clang`; macOS: `xcode-select --install`, Debian/Ubuntu: `sudo apt-get install
+  build-essential`). pip needs it whenever a package in the upstream environment file has no prebuilt wheel for
+  the Python version it pins; without one, building the benchmark environment fails on that package.
 - conda: the **Set up runner** workflow (below) installs [Miniforge](https://github.com/conda-forge/miniforge)
   under `<runner>/_work/_nwb_benchmarks/miniforge3`. A conda already on the machine is deliberately ignored,
   because its environments would live outside `_work`; to use one anyway, point the `conda_root` input at it.
@@ -116,8 +119,8 @@ Every job on a runner:
 
 Most of this can be done for you: after registering the runner (step 2), run **Actions → Set up runner → Run
 workflow** with the runner's label. It installs Miniforge when no conda is found and, on macOS, Wireshark when
-tshark is missing, both under `<runner>/_work/_nwb_benchmarks` and without sudo; reports sudo, the default
-network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works;
+tshark is missing, both under `<runner>/_work/_nwb_benchmarks` and without sudo; reports the C compiler, sudo,
+the default network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works;
 and ends with the exact lines to add to the runner's workflow file, if any. Re-run it any time to repair a
 machine; it only installs what is missing.
 
@@ -336,4 +339,5 @@ restores ownership of the whole state directory itself.
 | Network tracking benchmarks skipped or failing | Install tshark or set `tshark_path`; set `network_interface`; grant passwordless sudo (macOS/Linux). |
 | `Passwordless sudo is not available` warning | Pick one of the options under "Root and sudo", or set `use_sudo: false` to accept skipping the network tracking benchmarks. |
 | `Permission denied` under `_work/_nwb_benchmarks` | Leftovers from an interrupted sudo run: `sudo chown -R "$(id -un)" <runner>/_work/_nwb_benchmarks`. |
+| `No such file or directory: 'gcc'` / `Failed to build numcodecs` during `conda env create` | A package in the upstream environment file has no prebuilt wheel for the Python version it pins, so pip compiles it and the machine has no C compiler. Install one (Debian/Ubuntu `sudo apt-get install build-essential`, macOS `xcode-select --install`) or fix the pins in `environments/nwb_benchmarks.yaml` upstream; the **Set up runner** summary shows whether a compiler was found. |
 | `conda env create` fails | Check free disk space and `conda clean --all`; the environment file pins Python and uses `pip` for most packages, so network access to PyPI is required. |
