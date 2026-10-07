@@ -1,0 +1,168 @@
+# Reusable workflow: runs the NWB Benchmarks suite on ONE self-hosted runner and
+# commits the results to the results repository with that runner's own token.
+#
+# Do not schedule this workflow directly. Each runner (or "situation") gets its own small
+# caller workflow, generated from templates/runner-workflow.yml, which picks the schedule,
+# names the runner label, describes the machine through the inputs below, and passes the
+# runner's repository secret (RESULTS_UPLOAD_TOKEN_<LABEL>) as RESULTS_UPLOAD_TOKEN.
+#
+# This workflow only adds the job-level settings (which runner, one job per runner at a
+# time, timeout). All the steps live in the composite action .github/actions/benchmarks,
+# which other workflows can also use directly.
+name: Benchmarks
+
+on:
+  workflow_call:
+    inputs:
+      # --- Which runner -----------------------------------------------------------------
+      runner:
+        description: Label of the self-hosted runner to run on.
+        required: true
+        type: string
+
+      # --- What to run ------------------------------------------------------------------
+      nwb_benchmarks_repository:
+        description: GitHub repository (owner/name) containing the benchmark suite.
+        required: false
+        type: string
+        default: NeurodataWithoutBorders/nwb-benchmarks
+      nwb_benchmarks_ref:
+        description: Branch, tag, or commit of the benchmark suite to run.
+        required: false
+        type: string
+        default: main
+      benchmark_pattern:
+        description: Optional `--bench` pattern selecting a subset of the suite. Empty runs everything.
+        required: false
+        type: string
+        default: ""
+      debug:
+        description: Run with `--debug` (one repeat, verbose output, nothing uploaded). Use it to smoke-test a new runner.
+        required: false
+        type: boolean
+        default: false
+      upload:
+        description: Upload the results to the results repository.
+        required: false
+        type: boolean
+        default: true
+      timeout_minutes:
+        description: Maximum duration of the job in minutes.
+        required: false
+        type: number
+        default: 720
+
+      # --- Machine configuration (all optional) -----------------------------------------
+      conda_root:
+        description: Root of the conda installation (the directory containing etc/profile.d/conda.sh). Auto-detected when empty.
+        required: false
+        type: string
+        default: ""
+      conda_env_name:
+        description: Name of the conda environment created at the start and removed at the end of every job.
+        required: false
+        type: string
+        default: nwb_benchmarks_runner
+      network_interface:
+        description: Network interface for the network tracking benchmarks (en0, eth0, Ethernet, ...). Default route interface when empty.
+        required: false
+        type: string
+        default: ""
+      tshark_path:
+        description: Absolute path of the tshark executable. `tshark` on PATH when empty.
+        required: false
+        type: string
+        default: ""
+      use_sudo:
+        description: "`auto` uses sudo when it works without a password, `true` requires it, `false` never uses it."
+        required: false
+        type: string
+        default: auto
+      cache_directory:
+        description: Directory for the suite's downloads and temporary files (`nwb_benchmarks config_set_cache`). Default when empty.
+        required: false
+        type: string
+        default: ""
+      keep_conda_env:
+        description: Keep the conda environment after the job for inspection.
+        required: false
+        type: boolean
+        default: false
+
+      # --- Upload configuration ---------------------------------------------------------
+      results_repository:
+        description: Repository (owner/name) the token pushes to. In `pull-request` mode, the contributor's fork.
+        required: false
+        type: string
+        default: NeurodataWithoutBorders/nwb-benchmarks-results
+      results_branch:
+        description: Branch pushed to in `push` mode.
+        required: false
+        type: string
+        default: main
+      upload_mode:
+        description: "`push` commits straight to results_branch; `pull-request` pushes a branch and opens a pull request against upstream_repository."
+        required: false
+        type: string
+        default: push
+      upstream_repository:
+        description: "`pull-request` mode: repository that receives the pull request."
+        required: false
+        type: string
+        default: NeurodataWithoutBorders/nwb-benchmarks-results
+      upstream_branch:
+        description: "`pull-request` mode: base branch of the pull request."
+        required: false
+        type: string
+        default: main
+
+    secrets:
+      RESULTS_UPLOAD_TOKEN:
+        description: >-
+          Token with write access to results_repository. Pass this runner's repository secret
+          (convention: RESULTS_UPLOAD_TOKEN_<LABEL>, e.g. secrets.RESULTS_UPLOAD_TOKEN_LBL_MAC).
+          Not needed when upload is false or debug is true.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  benchmarks:
+    name: ${{ inputs.runner }}
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner }}
+    # Never run two benchmark jobs on the same machine at once; a second trigger waits.
+    concurrency:
+      group: nwb-benchmarks-${{ inputs.runner }}
+      cancel-in-progress: false
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    steps:
+      - name: Check out the benchmarks action
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run the benchmarks and upload the results
+        uses: ./.github/actions/benchmarks
+        with:
+          runner-label: ${{ inputs.runner }}
+          results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN }}
+          nwb-benchmarks-repository: ${{ inputs.nwb_benchmarks_repository }}
+          nwb-benchmarks-ref: ${{ inputs.nwb_benchmarks_ref }}
+          benchmark-pattern: ${{ inputs.benchmark_pattern }}
+          debug: ${{ inputs.debug }}
+          upload: ${{ inputs.upload }}
+          conda-root: ${{ inputs.conda_root }}
+          conda-env-name: ${{ inputs.conda_env_name }}
+          network-interface: ${{ inputs.network_interface }}
+          tshark-path: ${{ inputs.tshark_path }}
+          use-sudo: ${{ inputs.use_sudo }}
+          cache-directory: ${{ inputs.cache_directory }}
+          keep-conda-env: ${{ inputs.keep_conda_env }}
+          results-repository: ${{ inputs.results_repository }}
+          results-branch: ${{ inputs.results_branch }}
+          upload-mode: ${{ inputs.upload_mode }}
+          upstream-repository: ${{ inputs.upstream_repository }}
+          upstream-branch: ${{ inputs.upstream_branch }}
