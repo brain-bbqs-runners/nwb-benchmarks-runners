@@ -1,0 +1,25 @@
+# Formatting and hygiene checks from .pre-commit-config.yaml (Markdown sentence-per-line,
+# whitespace, YAML/JSON validity, workflow schema, codespell, black/ruff for the hook script).
+# Runs on GitHub-hosted runners only; the self-hosted runners are never exposed to pull requests.
+name: pre-commit
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: pre-commit/action@v3.0.1
