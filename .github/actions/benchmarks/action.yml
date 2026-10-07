@@ -5,8 +5,8 @@
 #
 #   - uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
 #     with:
-#       runner-label: my-machine
-#       results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN_MY_MACHINE }}
+#       runner-label: lbl_laptop
+#       results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN_LBL_LAPTOP }}
 #
 # The action is self-contained (its shell scripts live in ./scripts), so the calling
 # workflow does not need to check out this repository first.
@@ -50,7 +50,7 @@ inputs:
 
   # --- Machine configuration (all optional) -------------------------------------------
   conda-root:
-    description: Root of the conda installation (the directory containing etc/profile.d/conda.sh). Auto-detected when empty.
+    description: Root of the conda installation (the directory containing etc/profile.d/conda.sh). When empty, the installation under the runner's _work folder, then `conda` on PATH, then common locations are tried.
     required: false
     default: ""
   conda-env-name:
@@ -62,7 +62,7 @@ inputs:
     required: false
     default: ""
   tshark-path:
-    description: Absolute path of the tshark executable. `tshark` on PATH when empty.
+    description: Absolute path of the tshark executable. When empty, the Wireshark copy under the runner's _work folder, then `tshark` on PATH, then common locations are tried.
     required: false
     default: ""
   use-sudo:
@@ -70,7 +70,7 @@ inputs:
     required: false
     default: auto
   cache-directory:
-    description: Directory for the suite's downloads and temporary files. Default when empty.
+    description: Directory for the suite's downloads and temporary files. Under the runner's _work folder when empty.
     required: false
     default: ""
   keep-conda-env:
@@ -80,23 +80,11 @@ inputs:
 
   # --- Upload configuration -----------------------------------------------------------
   results-repository:
-    description: Repository (owner/name) the token pushes to. In pull-request mode, the contributor's fork.
+    description: Repository (owner/name) the results are committed to. The token needs write access to it.
     required: false
     default: NeurodataWithoutBorders/nwb-benchmarks-results
   results-branch:
-    description: Branch pushed to in push mode.
-    required: false
-    default: main
-  upload-mode:
-    description: '"push" commits straight to results-branch; "pull-request" pushes a branch and opens a pull request against upstream-repository.'
-    required: false
-    default: push
-  upstream-repository:
-    description: Pull-request mode. Repository that receives the pull request.
-    required: false
-    default: NeurodataWithoutBorders/nwb-benchmarks-results
-  upstream-branch:
-    description: Pull-request mode. Base branch of the pull request.
+    description: Branch the results are committed to.
     required: false
     default: main
 
@@ -111,6 +99,12 @@ outputs:
 runs:
   using: composite
   steps:
+    # Everything the job writes (results, caches, conda) stays under the runner's _work folder:
+    # this points HOME for the remaining steps at <runner>/_work/_nwb_benchmarks/home.
+    - name: Keep all state under the runner's _work folder
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/scripts/localize.sh"
+
     # Fail in seconds rather than after hours of benchmarking when the token is missing.
     - name: Check that an upload token was passed
       if: ${{ inputs.debug != 'true' && inputs.upload == 'true' }}
@@ -194,9 +188,6 @@ runs:
         RESULTS_UPLOAD_TOKEN: ${{ inputs.results-upload-token }}
         RESULTS_REPOSITORY: ${{ inputs.results-repository }}
         RESULTS_BRANCH: ${{ inputs.results-branch }}
-        RESULTS_UPLOAD_MODE: ${{ inputs.upload-mode }}
-        RESULTS_UPSTREAM_REPOSITORY: ${{ inputs.upstream-repository }}
-        RESULTS_UPSTREAM_BRANCH: ${{ inputs.upstream-branch }}
       run: bash "$GITHUB_ACTION_PATH/scripts/upload_results.sh"
 
     - name: Save console log and result files as a workflow artifact

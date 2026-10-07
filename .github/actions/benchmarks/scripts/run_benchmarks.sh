@@ -48,10 +48,12 @@ activate_conda_env "$CONDA_ROOT" "$ENV_NAME"
 
 # --- Network tracking configuration -------------------------------------------------
 # nwb_benchmarks treats an empty value as "set", so these are only exported when non-empty.
-if [ -z "${TSHARK_PATH:-}" ]; then
-  unset TSHARK_PATH
-else
+if tshark_bin="$(find_tshark)"; then
+  export TSHARK_PATH="$tshark_bin"
   log "tshark: $TSHARK_PATH"
+else
+  unset TSHARK_PATH
+  warn "tshark was not found; the network tracking benchmarks will be skipped."
 fi
 
 if [ -z "${NWB_BENCHMARKS_NETWORK_INTERFACE:-}" ]; then

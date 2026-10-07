@@ -1,0 +1,100 @@
+# One-time (or any-time) setup of a self-hosted runner. Register the runner first
+# (README step 2), then run this from the Actions tab with the runner's label. It
+#
+#   - installs Miniforge when no conda is found and, on macOS, Wireshark.app (for tshark)
+#     when tshark is not found, both under <runner>/_work/_nwb_benchmarks (nothing global),
+#   - reports git, conda, tshark, passwordless sudo, the default network interface, and disk,
+#   - builds the benchmark conda environment once to prove the toolchain works, then removes it,
+#   - writes a summary with the lines to add to the runner's workflow file.
+#
+# Safe to re-run at any time; it only installs what is missing.
+name: Set up runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Label of the self-hosted runner to set up
+        required: true
+        type: string
+      install_conda:
+        description: Install Miniforge when no conda installation is found
+        required: false
+        type: boolean
+        default: true
+      install_tshark:
+        description: macOS only. Copy Wireshark.app (which contains tshark) under _work when tshark is not found
+        required: false
+        type: boolean
+        default: true
+      wireshark_dmg_url:
+        description: macOS only. Override the Wireshark disk image URL (default is Wireshark's "Latest" link for this architecture)
+        required: false
+        type: string
+        default: ""
+      verify_environment:
+        description: Clone nwb-benchmarks and build its conda environment once to prove the toolchain works (removed afterwards)
+        required: false
+        type: boolean
+        default: true
+      nwb_benchmarks_ref:
+        description: Branch, tag, or commit of nwb-benchmarks to build the environment from
+        required: false
+        type: string
+        default: main
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: ${{ inputs.runner }}
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner }}
+    # Same group as the benchmark jobs, so setup never runs while a benchmark is running.
+    concurrency:
+      group: nwb-benchmarks-${{ inputs.runner }}
+      cancel-in-progress: false
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      RUNNER_LABEL: ${{ inputs.runner }}
+      NWB_BENCHMARKS_CLONE_DIR: ${{ github.workspace }}/nwb-benchmarks
+
+    steps:
+      - name: Check out the scripts
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Keep all state under the runner's _work folder
+        run: bash .github/actions/benchmarks/scripts/localize.sh
+
+      - name: Install requirements
+        env:
+          INSTALL_CONDA: ${{ inputs.install_conda }}
+          INSTALL_TSHARK: ${{ inputs.install_tshark }}
+          WIRESHARK_DMG_URL: ${{ inputs.wireshark_dmg_url }}
+        run: bash .github/actions/benchmarks/scripts/setup_requirements.sh
+
+      - name: Clone nwb-benchmarks
+        if: ${{ inputs.verify_environment }}
+        env:
+          REF: ${{ inputs.nwb_benchmarks_ref }}
+        run: |
+          rm -rf "${NWB_BENCHMARKS_CLONE_DIR:?}" || sudo -n rm -rf "${NWB_BENCHMARKS_CLONE_DIR:?}"
+          git clone --quiet https://github.com/NeurodataWithoutBorders/nwb-benchmarks.git "$NWB_BENCHMARKS_CLONE_DIR"
+          git -C "$NWB_BENCHMARKS_CLONE_DIR" checkout --quiet "$REF"
+
+      - name: Build the benchmark environment once
+        if: ${{ inputs.verify_environment }}
+        run: bash .github/actions/benchmarks/scripts/setup_environment.sh
+
+      - name: Remove the environment and the clone
+        if: ${{ always() && inputs.verify_environment }}
+        env:
+          USED_SUDO: "false"
+        run: bash .github/actions/benchmarks/scripts/cleanup.sh
