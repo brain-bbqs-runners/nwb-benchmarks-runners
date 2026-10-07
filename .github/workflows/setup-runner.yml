@@ -3,7 +3,7 @@
 #
 #   - installs Miniforge when no conda is found and, on macOS, Wireshark.app (for tshark)
 #     when tshark is not found, both under <runner>/_work/_nwb_benchmarks (nothing global),
-#   - reports git, conda, tshark, passwordless sudo, the default network interface, and disk,
+#   - reports git, a C compiler, conda, tshark, passwordless sudo, the default network interface, and disk,
 #   - builds the benchmark conda environment once to prove the toolchain works, then removes it,
 #   - writes a summary with the lines to add to the runner's workflow file.
 #

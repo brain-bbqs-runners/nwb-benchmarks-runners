@@ -8,9 +8,9 @@
 #   - Linux and Windows: tshark cannot be installed without touching the system, so the
 #     script only reports what to do
 #
-# It then reports git, conda, tshark, passwordless sudo, the default network interface and
-# disk space, together with the lines to add to the runner's workflow file. Safe to re-run;
-# it only installs what is missing.
+# It then reports git, a C compiler, conda, tshark, passwordless sudo, the default network
+# interface and disk space, together with the lines to add to the runner's workflow file.
+# Safe to re-run; it only installs what is missing.
 #
 # Used by .github/workflows/setup-runner.yml, not by the benchmarks action.
 #
@@ -53,6 +53,28 @@ if command -v git > /dev/null 2>&1; then
 else
   die "git is not installed. On macOS run 'xcode-select --install'; on Linux install it with the package manager. Then re-run this workflow."
 fi
+group_end
+
+# --- C compiler ---------------------------------------------------------------------
+# Only checked, not installed: like git it is a system tool. pip needs it for any Python
+# package that has no prebuilt wheel for the Python version pinned by nwb-benchmarks.
+group_start "C compiler"
+CC_STATUS="not found"
+if is_windows; then
+  CC_STATUS="not checked on Windows"
+else
+  for candidate in cc gcc clang; do
+    if cc_bin="$(command -v "$candidate" 2> /dev/null)"; then
+      CC_STATUS="$("$cc_bin" --version 2> /dev/null | head -n 1 || true) at \`$cc_bin\`"
+      break
+    fi
+  done
+  if [ "$CC_STATUS" = "not found" ]; then
+    warn "No C compiler (cc, gcc or clang) was found. Building the benchmark environment fails whenever a package has no prebuilt wheel for its Python version."
+    note "No C compiler (cc, gcc or clang) was found. Building the benchmark environment fails whenever a package has no prebuilt wheel for its Python version (pip then reports \`No such file or directory: 'gcc'\`). Install one if that happens: Debian/Ubuntu \`sudo apt-get install build-essential\`, Fedora \`sudo dnf install gcc\`, macOS \`xcode-select --install\`."
+  fi
+fi
+log "C compiler: $CC_STATUS"
 group_end
 
 # --- conda --------------------------------------------------------------------------
@@ -187,6 +209,7 @@ SECRET_NAME="RESULTS_UPLOAD_TOKEN_$(printf '%s' "$LABEL" | tr 'a-z-' 'A-Z_')"
   echo "| Runner user | $USER_NAME |"
   echo "| State directory | \`$STATE_DIR\` |"
   echo "| git | $GIT_STATUS |"
+  echo "| C compiler | $CC_STATUS |"
   echo "| conda | $CONDA_STATUS |"
   echo "| tshark | $TSHARK_STATUS |"
   echo "| Passwordless sudo | $SUDO_STATUS |"
