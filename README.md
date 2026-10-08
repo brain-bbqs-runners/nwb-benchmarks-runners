@@ -19,7 +19,6 @@ Each contributor registers one or more of their own machines as self-hosted runn
   - [Secret (one repository secret per runner)](#secret-one-repository-secret-per-runner)
   - [Workflow inputs](#workflow-inputs)
 - [Operational notes](#operational-notes)
-- [Troubleshooting](#troubleshooting)
 
 ## How it works
 
@@ -36,7 +35,7 @@ Each contributor registers one or more of their own machines as self-hosted runn
 templates/runner-workflow.yml   copy this file to add a runner
 .pre-commit-config.yaml         formatting and hygiene hooks (`pre-commit run --all-files`)
 scripts/check_sentence_per_line.py   hook that puts each Markdown sentence on its own line
-docs/development.md             how the workflow, the action and the files on the runner fit together; repository checks
+docs/development.md             how the workflow, the action and the files on the runner fit together; repository checks; troubleshooting
 SECURITY.md                     what runs where, with which privileges and tokens
 ```
 
@@ -47,7 +46,7 @@ A runner is described by exactly two things:
 
 A "situation" is just another workflow file: the same machine can have one file that runs the full suite nightly and another that runs a `--bench` subset hourly, both passing the same secret.
 
-How the pieces fit together (reusable workflow, composite action), where a job writes on the runner machine, the layout of those files and the repository's own checks are described in [docs/development.md](docs/development.md).
+How the pieces fit together (reusable workflow, composite action), where a job writes on the runner machine, the layout of those files, the repository's own checks and troubleshooting are described in [docs/development.md](docs/development.md).
 
 Every job on a runner:
 
@@ -230,17 +229,3 @@ The manual trigger form of each per-runner workflow exposes `benchmark_pattern`,
   [NeurodataWithoutBorders/nwb-benchmarks#198](https://github.com/NeurodataWithoutBorders/nwb-benchmarks/pull/198) still try to POST to the retired server and fail at that final step, and the workflow uploads the files itself.
 - Every job stores its console log and the new result files as a workflow artifact for 30 days, so results of a failed upload can also be recovered from the Actions UI.
 - Machine names in the results stay anonymous: `nwb_benchmarks` records `github-<timestamp>` whenever it runs under GitHub Actions, while the stable machine id is a hash of the hardware description.
-
-## Troubleshooting
-
-| Symptom | What to do |
-| --- | --- |
-| Job stays "Waiting for a runner to pick up this job" | The runner is offline or its label differs from the workflow's `runner` value. Check **Settings → Actions → Runners** and `./svc.sh status` on the machine. |
-| `No conda installation under .../_work/_nwb_benchmarks/miniforge3` | Run the **Set up runner** workflow for this runner, or set the `conda_root` input to use an installation elsewhere. |
-| `No upload token was passed` / `RESULTS_UPLOAD_TOKEN is empty` | The repository secret named in the workflow file's `secrets:` block does not exist (check the spelling: uppercase, underscores), or the workflow file does not pass it. |
-| Push rejected with 403 / authentication failed | The token expired or its owner lacks write access to `results_repository`. Replace the secret. |
-| Network tracking benchmarks skipped or failing | Install tshark or set `tshark_path`; set `network_interface`; grant passwordless sudo (macOS/Linux). |
-| `Passwordless sudo is not available` warning | Pick one of the options under "Root and sudo", or set `use_sudo: false` to accept skipping the network tracking benchmarks. |
-| `Permission denied` under `_work/_nwb_benchmarks` | Leftovers from an interrupted sudo run: `sudo chown -R "$(id -un)" <runner>/_work/_nwb_benchmarks`. |
-| `No such file or directory: 'gcc'` / `Failed to build numcodecs` during `conda env create` | A package in the upstream environment file has no prebuilt wheel for the Python version it pins, so pip compiles it and the machine has no C compiler. Install one (Debian/Ubuntu `sudo apt-get install build-essential`, macOS `xcode-select --install`) or fix the pins in `environments/nwb_benchmarks.yaml` upstream; the **Set up runner** summary shows whether a compiler was found. |
-| `conda env create` fails | Check free disk space and `conda clean --all`; the environment file pins Python and uses `pip` for most packages, so network access to PyPI is required. |
