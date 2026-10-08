@@ -34,3 +34,10 @@ steps:
 ```
 
 The inputs of the action are the workflow inputs with dashes instead of underscores; `lint.yml` checks that the action only references inputs it declares.
+
+## Repository checks
+
+- Markdown in this repository keeps each sentence on its own line, the convention of
+  [nwb-benchmarks-paper](https://github.com/NeurodataWithoutBorders/nwb-benchmarks-paper), from which the `.pre-commit-config.yaml` and the `sentence-per-line` hook are taken. A list item may hold several sentences on its line.
+- Install [pre-commit](https://pre-commit.com) and run `pre-commit run --all-files` before pushing; the `pre-commit` workflow runs the same hooks on every pull request. The sentence hook rewrites files and reports a failure the first time so the changes can be reviewed; run it again to confirm.
+- `lint.yml` additionally runs actionlint and shellcheck on the workflows and scripts.

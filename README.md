@@ -19,7 +19,6 @@ Each contributor registers one or more of their own machines as self-hosted runn
   - [Secret (one repository secret per runner)](#secret-one-repository-secret-per-runner)
   - [Workflow inputs](#workflow-inputs)
 - [Operational notes](#operational-notes)
-- [Repository checks](#repository-checks)
 - [Troubleshooting](#troubleshooting)
 
 ## How it works
@@ -37,7 +36,7 @@ Each contributor registers one or more of their own machines as self-hosted runn
 templates/runner-workflow.yml   copy this file to add a runner
 .pre-commit-config.yaml         formatting and hygiene hooks (`pre-commit run --all-files`)
 scripts/check_sentence_per_line.py   hook that puts each Markdown sentence on its own line
-docs/development.md             how the workflow, the action and the files on the runner fit together
+docs/development.md             how the workflow, the action and the files on the runner fit together; repository checks
 SECURITY.md                     what runs where, with which privileges and tokens
 ```
 
@@ -48,7 +47,7 @@ A runner is described by exactly two things:
 
 A "situation" is just another workflow file: the same machine can have one file that runs the full suite nightly and another that runs a `--bench` subset hourly, both passing the same secret.
 
-How the pieces fit together (reusable workflow, composite action), where a job writes on the runner machine and the layout of those files are described in [docs/development.md](docs/development.md).
+How the pieces fit together (reusable workflow, composite action), where a job writes on the runner machine, the layout of those files and the repository's own checks are described in [docs/development.md](docs/development.md).
 
 Every job on a runner:
 
@@ -231,13 +230,6 @@ The manual trigger form of each per-runner workflow exposes `benchmark_pattern`,
   [NeurodataWithoutBorders/nwb-benchmarks#198](https://github.com/NeurodataWithoutBorders/nwb-benchmarks/pull/198) still try to POST to the retired server and fail at that final step, and the workflow uploads the files itself.
 - Every job stores its console log and the new result files as a workflow artifact for 30 days, so results of a failed upload can also be recovered from the Actions UI.
 - Machine names in the results stay anonymous: `nwb_benchmarks` records `github-<timestamp>` whenever it runs under GitHub Actions, while the stable machine id is a hash of the hardware description.
-
-## Repository checks
-
-- Markdown in this repository keeps each sentence on its own line, the convention of
-  [nwb-benchmarks-paper](https://github.com/NeurodataWithoutBorders/nwb-benchmarks-paper), from which the `.pre-commit-config.yaml` and the `sentence-per-line` hook are taken. A list item may hold several sentences on its line.
-- Install [pre-commit](https://pre-commit.com) and run `pre-commit run --all-files` before pushing; the `pre-commit` workflow runs the same hooks on every pull request. The sentence hook rewrites files and reports a failure the first time so the changes can be reviewed; run it again to confirm.
-- `lint.yml` additionally runs actionlint and shellcheck on the workflows and scripts.
 
 ## Troubleshooting
 
