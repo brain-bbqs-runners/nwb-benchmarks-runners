@@ -1,12 +1,12 @@
-# Formatting and hygiene checks, taken from NeurodataWithoutBorders/nwb-benchmarks-paper.
+# Formatting and hygiene checks, after NeurodataWithoutBorders/nwb-benchmarks-paper.
 # Run locally with `pre-commit run --all-files`; the pre-commit workflow runs the same hooks
-# on every pull request. The sentence-per-line hook rewrites Markdown so that each sentence
-# sits on its own line (list items excepted) and fails once so the changes can be reviewed.
+# on every pull request. md-lines rewrites Markdown so that each sentence sits on its own line
+# (list items excepted) and fails once so the changes can be reviewed.
 default_install_hook_types:
   - pre-commit
 
 default_language_version:
-  python: python3.11
+  python: python3.13
 
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -31,26 +31,12 @@ repos:
     - id: check-github-workflows
       args: ["--verbose"]
 
-- repo: https://github.com/psf/black-pre-commit-mirror
-  rev: 26.5.1
-  hooks:
-  - id: black
-
-- repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.15.20
-  hooks:
-  - id: ruff
-    args: [ --fix ]
-
 - repo: https://github.com/codespell-project/codespell
   rev: v2.4.2
   hooks:
   - id: codespell
 
-- repo: local
+- repo: https://github.com/CodyCBakerPhD/md-lines-pre-commit
+  rev: v0.1.0
   hooks:
-  - id: sentence-per-line
-    name: Put each Markdown sentence on its own line
-    entry: python scripts/check_sentence_per_line.py
-    language: python
-    types: [markdown]
+  - id: md-lines

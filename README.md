@@ -207,7 +207,6 @@ The manual trigger form of each per-runner workflow exposes `benchmark_pattern`,
 - Cron schedules are in UTC and only run from the default branch (`dev`). GitHub disables scheduled workflows after 60 days without commits to the repository; any commit re-enables them.
 - A runner never executes two benchmark jobs at once; a second trigger for the same label waits for the first to finish. Put different machines on different hours if they share a network connection.
 - Jobs time out after 12 hours by default (`timeout_minutes`).
-- The job fails when `nwb_benchmarks run` produces no results file. A non-zero exit *after* results were written is tolerated and reported as a warning: versions of `nwb-benchmarks` from before
-  [NeurodataWithoutBorders/nwb-benchmarks#198](https://github.com/NeurodataWithoutBorders/nwb-benchmarks/pull/198) still try to POST to the retired server and fail at that final step, and the workflow uploads the files itself.
+- The job fails when `nwb_benchmarks run` produces no results file. A non-zero exit *after* results were written is tolerated and reported as a warning: versions of `nwb-benchmarks` from before [NeurodataWithoutBorders/nwb-benchmarks#198](https://github.com/NeurodataWithoutBorders/nwb-benchmarks/pull/198) still try to POST to the retired server and fail at that final step, and the workflow uploads the files itself.
 - Every job stores its console log and the new result files as a workflow artifact for 30 days, so results of a failed upload can also be recovered from the Actions UI.
 - Machine names in the results stay anonymous: `nwb_benchmarks` records `github-<timestamp>` whenever it runs under GitHub Actions, while the stable machine id is a hash of the hardware description.

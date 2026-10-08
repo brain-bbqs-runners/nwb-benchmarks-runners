@@ -1,5 +1,5 @@
-# Formatting and hygiene checks from .pre-commit-config.yaml (Markdown sentence-per-line,
-# whitespace, YAML/JSON validity, workflow schema, codespell, black/ruff for the hook script).
+# Formatting and hygiene checks from .pre-commit-config.yaml (md-lines for Markdown,
+# whitespace, YAML/JSON validity, workflow schema, codespell).
 # Runs on GitHub-hosted runners only; the self-hosted runners are never exposed to pull requests.
 name: pre-commit
 
@@ -21,5 +21,6 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          # md-lines needs Python 3.13 or newer; see default_language_version in the config.
+          python-version: "3.13"
       - uses: pre-commit/action@v3.0.1
