@@ -1,2 +1,4 @@
 [codespell]
 skip = .git
+# Also flag British spellings: this repository is written in American English.
+builtin = clear,rare,en-GB_to_en-US

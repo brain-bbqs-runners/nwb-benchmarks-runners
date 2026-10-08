@@ -1,4 +1,4 @@
-# Scheduled benchmark runs on the self-hosted runner labelled `ackermann`
+# Scheduled benchmark runs on the self-hosted runner labeled `ackermann`
 # (Cody Baker's machine).
 #
 # One file like this exists per runner or situation. It chooses WHEN to run, WHICH runner

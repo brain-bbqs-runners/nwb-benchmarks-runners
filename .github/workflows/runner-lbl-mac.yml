@@ -1,4 +1,4 @@
-# Scheduled benchmark runs on the self-hosted runner labelled `lbl-mac`
+# Scheduled benchmark runs on the self-hosted runner labeled `lbl-mac`
 # (the official LBL benchmarking Mac).
 #
 # One file like this exists per runner or situation. It chooses WHEN to run, WHICH runner
