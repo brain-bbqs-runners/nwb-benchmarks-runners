@@ -75,8 +75,6 @@ Try the runner once in the foreground with `./run.sh` (it should print `Listenin
 ./svc.sh status
 ```
 
-Only `schedule` and `workflow_dispatch` events ever reach the self-hosted runners (see [SECURITY.md](SECURITY.md)).
-
 ### 3. Set up the machine with the Set up runner workflow
 
 Run **Actions → Set up runner → Run workflow** with the runner's label.
