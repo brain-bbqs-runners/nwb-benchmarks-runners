@@ -10,11 +10,11 @@ Each contributor registers one or more of their own machines as self-hosted runn
 - [Adding a runner](#adding-a-runner)
   - [1. Prepare the machine](#1-prepare-the-machine)
   - [2. Register the self-hosted runner](#2-register-the-self-hosted-runner)
-  - [3. Create the upload token](#3-create-the-upload-token)
-  - [4. Store the token as a repository secret](#4-store-the-token-as-a-repository-secret)
-  - [5. Add the per-runner workflow](#5-add-the-per-runner-workflow)
-  - [6. Test it](#6-test-it)
-- [Root and sudo](#root-and-sudo)
+  - [3. Set up the machine with the Set up runner workflow](#3-set-up-the-machine-with-the-set-up-runner-workflow)
+  - [4. Create the upload token](#4-create-the-upload-token)
+  - [5. Store the token as a repository secret](#5-store-the-token-as-a-repository-secret)
+  - [6. Add the per-runner workflow](#6-add-the-per-runner-workflow)
+  - [7. Test it](#7-test-it)
 - [Configuration reference](#configuration-reference)
   - [Secret (one repository secret per runner)](#secret-one-repository-secret-per-runner)
   - [Workflow inputs](#workflow-inputs)
@@ -45,16 +45,10 @@ Every job on a runner:
 - macOS or Linux. Windows is best effort: it needs Git for Windows (for `bash`) and cannot run the network tracking benchmarks, which need root.
 - `git`.
 - A C compiler (`gcc` or `clang`; macOS: `xcode-select --install`, Debian/Ubuntu: `sudo apt-get install build-essential`). pip needs it whenever a package in the upstream environment file has no prebuilt wheel for the Python version it pins; without one, building the benchmark environment fails on that package.
-- conda: the **Set up runner** workflow (below) installs [Miniforge](https://github.com/conda-forge/miniforge) under `<runner>/_work/_nwb_benchmarks/miniforge3`. A conda already on the machine is deliberately ignored, because its environments would live outside `_work`; to use one anyway, point the `conda_root` input at it.
-- [tshark](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks. The **Set up runner** workflow installs it: on macOS it copies `Wireshark.app` under `_work`, where its `tshark` is found automatically; on Linux it installs the distribution package when the runner's user has passwordless sudo, and otherwise prints the command. On Windows install Wireshark and set `tshark_path`.
-- Root for the network tracking benchmarks, in one of the forms described under "Root and sudo" below (passwordless sudo is the usual choice). Without it the network tracking benchmarks are skipped or fail while the timing benchmarks still run.
 - The machine must be awake and online at the scheduled times and should otherwise be idle while the suite runs; a full run takes hours.
+- Root for the network tracking benchmarks, in one of the forms described in step 3 (passwordless sudo is the usual choice). Without it the network tracking benchmarks are skipped or fail while the timing benchmarks still run.
 
-Most of this can be done for you: after registering the runner (step 2), run **Actions → Set up runner → Run workflow** with the runner's label.
-It installs Miniforge when no conda is found and, on macOS, Wireshark when tshark is missing, both under `<runner>/_work/_nwb_benchmarks` and without sudo.
-With root (passwordless sudo for the runner's user, or a root runner) it also installs tshark on Linux and, with `capture_without_root` ticked, sets up packet capture without root (see "Root and sudo").
-It reports the C compiler, sudo, the default network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works; and ends with a copy-paste block of anything that still needs root on the machine plus the lines to add to the runner's workflow file, if any.
-Re-run it any time to repair a machine; it only installs what is missing.
+conda and tshark are installed in step 3.
 
 ### 2. Register the self-hosted runner
 
@@ -81,41 +75,22 @@ Try the runner once in the foreground with `./run.sh` (it should print `Listenin
 ./svc.sh status
 ```
 
-Only `schedule` and `workflow_dispatch` events ever reach the self-hosted runners (see Security below).
+Only `schedule` and `workflow_dispatch` events ever reach the self-hosted runners (see [SECURITY.md](SECURITY.md)).
 
-### 3. Create the upload token
+### 3. Set up the machine with the Set up runner workflow
 
-Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with:
+Run **Actions → Set up runner → Run workflow** with the runner's label.
+It installs Miniforge when no conda is found and, on macOS, Wireshark when tshark is missing, both under `<runner>/_work/_nwb_benchmarks` and without sudo.
+With root (passwordless sudo for the runner's user, or a root runner) it also installs tshark on Linux and, with `capture_without_root` ticked, sets up packet capture without root (see below).
+It reports the C compiler, sudo, the default network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works; and ends with a copy-paste block of anything that still needs root on the machine plus the lines to add to the runner's workflow file, if any.
+Re-run it any time to repair a machine; it only installs what is missing.
 
-- **Repository access**: only the results repository, `NeurodataWithoutBorders/nwb-benchmarks-results`. The token's owner needs write access to it, because results are committed straight to its `main` branch.
-- **Permissions**: *Contents: Read and write*. Nothing else.
+The two installations in detail:
 
-A classic token with the `public_repo` scope also works, but is not recommended for security reasons.
+- conda: the workflow installs [Miniforge](https://github.com/conda-forge/miniforge) under `<runner>/_work/_nwb_benchmarks/miniforge3`. A conda already on the machine is deliberately ignored, because its environments would live outside `_work`; to use one anyway, point the `conda_root` input at it.
+- [tshark](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks. The workflow installs it: on macOS it copies `Wireshark.app` under `_work`, where its `tshark` is found automatically; on Linux it installs the distribution package when the runner's user has passwordless sudo, and otherwise prints the command. On Windows install Wireshark and set `tshark_path`.
 
-### 4. Store the token as a repository secret
-
-A repository administrator adds the token under **Settings → Secrets and variables → Actions → New repository secret**, named `RESULTS_UPLOAD_TOKEN_<LABEL>`: the runner label in uppercase with dashes turned into underscores (`lbl_laptop` → `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`).
-One secret per runner; the token can be the contributor's own or one the administrator creates for that machine.
-Rotating a token means replacing this one secret; nothing on the machine changes.
-
-### 5. Add the per-runner workflow
-
-Copy `templates/runner-workflow.yml` to `.github/workflows/runner-<label>.yml` and:
-
-- replace every `RUNNER_LABEL` with your label and `RUNNER_SECRET_NAME` with the secret name from step 4;
-- choose a cron schedule (UTC);
-- uncomment and fill in the machine inputs your machine needs (see the configuration reference; often none).
-
-Open a pull request to `dev`.
-Scheduled workflows only run from the default branch, so nothing happens until the file is merged.
-
-### 6. Test it
-
-1. **Actions → Benchmarks (<label>) → Run workflow**, tick **debug**. This runs one repeat of each benchmark with verbose output and uploads nothing. It confirms the runner is online, conda is found, and the suite starts.
-2. Run it again without debug, optionally with a `benchmark_pattern` such as `time_remote_slicing.HDF5PyNWBRemfilePreloadedNoCacheContinuousSliceBenchmark.time_slice` to keep it short.
-   The job summary links to the commit in the results repository.
-
-## Root and sudo
+#### Root for the network tracking benchmarks (optional)
 
 The network tracking benchmarks capture packets with tshark and map them to processes with `psutil.net_connections()`, which needs root on macOS; packet capture needs root or a capture capability on every platform.
 The timing benchmarks need neither.
@@ -162,6 +137,38 @@ On macOS, Wireshark's ChmodBPF and the `access_bpf` group cover packet capture b
 
 **Skip the network tracking benchmarks.** Set `use_sudo: false` without any of the above.
 The timing benchmarks run normally; the network tracking benchmarks are skipped when tshark is missing and fail when it is present but cannot capture.
+
+### 4. Create the upload token
+
+Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with:
+
+- **Repository access**: only the results repository, `NeurodataWithoutBorders/nwb-benchmarks-results`. The token's owner needs write access to it, because results are committed straight to its `main` branch.
+- **Permissions**: *Contents: Read and write*. Nothing else.
+
+A classic token with the `public_repo` scope also works, but is not recommended for security reasons.
+
+### 5. Store the token as a repository secret
+
+A repository administrator adds the token under **Settings → Secrets and variables → Actions → New repository secret**, named `RESULTS_UPLOAD_TOKEN_<LABEL>`: the runner label in uppercase with dashes turned into underscores (`lbl_laptop` → `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`).
+One secret per runner; the token can be the contributor's own or one the administrator creates for that machine.
+Rotating a token means replacing this one secret; nothing on the machine changes.
+
+### 6. Add the per-runner workflow
+
+Copy `templates/runner-workflow.yml` to `.github/workflows/runner-<label>.yml` and:
+
+- replace every `RUNNER_LABEL` with your label and `RUNNER_SECRET_NAME` with the secret name from step 5;
+- choose a cron schedule (UTC);
+- uncomment and fill in the machine inputs your machine needs (see the configuration reference; often none).
+
+Open a pull request to `dev`.
+Scheduled workflows only run from the default branch, so nothing happens until the file is merged.
+
+### 7. Test it
+
+1. **Actions → Benchmarks (<label>) → Run workflow**, tick **debug**. This runs one repeat of each benchmark with verbose output and uploads nothing. It confirms the runner is online, conda is found, and the suite starts.
+2. Run it again without debug, optionally with a `benchmark_pattern` such as `time_remote_slicing.HDF5PyNWBRemfilePreloadedNoCacheContinuousSliceBenchmark.time_slice` to keep it short.
+   The job summary links to the commit in the results repository.
 
 ## Configuration reference
 
