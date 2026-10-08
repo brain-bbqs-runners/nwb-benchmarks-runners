@@ -59,11 +59,10 @@ Re-run it any time to repair a machine; it only installs what is missing.
 ### 2. Register the self-hosted runner
 
 First pick the **runner label**: lowercase letters, digits, dashes, and underscores, e.g. `lbl_laptop`.
-It is the one string that ties everything together: the workflow file is `runner-<label>.yml` and selects the machine with `runs-on: [self-hosted, <label>]`, and the secret is `RESULTS_UPLOAD_TOKEN_<LABEL>`.
-The existing `runner-*.yml` files in `.github/workflows/` show real ones.
+It is the one string that ties everything together: the workflow file is `runner-<label>.yml` and selects the machine with `runs-on: [self-hosted, <label>]`, then the secret is `RESULTS_UPLOAD_TOKEN_<LABEL>` (all uppercase characters separate with underscores; e.g., `LBL_LAPTOP`).
 
-Then, in the repository, open **Settings → Actions → Runners → New self-hosted runner**, choose the machine's OS and architecture, and run the download and `./config.sh --url ... --token ...` commands GitHub shows, as the user who owns the conda installation (not root; see "Root and sudo" below).
-`config.sh` asks four questions:
+Then, in the repository, open **Settings → Actions → Runners → New self-hosted runner**, choose the machine's OS and architecture, then follow all instructions provided by GitHub.
+This process will ask for a number of inputs:
 
 | Prompt | What to enter |
 | --- | --- |
@@ -90,9 +89,8 @@ Create a [fine-grained personal access token](https://github.com/settings/person
 
 - **Repository access**: only the results repository, `NeurodataWithoutBorders/nwb-benchmarks-results`. The token's owner needs write access to it, because results are committed straight to its `main` branch.
 - **Permissions**: *Contents: Read and write*. Nothing else.
-- An expiration you keep track of: when the token expires, uploads fail with an authentication error until you store a new one. Result files are never lost; they stay pending on the machine.
 
-A classic token with the `public_repo` scope also works.
+A classic token with the `public_repo` scope also works, but is not recommended for security reasons.
 
 ### 4. Store the token as a repository secret
 
