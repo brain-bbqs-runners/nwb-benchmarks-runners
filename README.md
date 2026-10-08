@@ -22,31 +22,11 @@ Each contributor registers one or more of their own machines as self-hosted runn
 
 ## How it works
 
-```
-.github/actions/benchmarks/
-  action.yml             composite action with all the steps (clone, conda env, run, upload, clean up)
-  scripts/               the shell scripts the action runs on the self-hosted machine
-.github/workflows/
-  benchmarks.yml         reusable workflow: job-level settings (runner, concurrency, timeout) around the action
-  runner-<label>.yml     one per runner or situation: schedule, runner label, machine config, token secret
-  setup-runner.yml       manual: install conda (and tshark on macOS) under _work, check sudo, build the env once
-  lint.yml               actionlint + shellcheck + action validation, on GitHub-hosted runners only
-  pre-commit.yml         the pre-commit hooks below, on GitHub-hosted runners only
-templates/runner-workflow.yml   copy this file to add a runner
-.pre-commit-config.yaml         formatting and hygiene hooks (`pre-commit run --all-files`)
-scripts/check_sentence_per_line.py   hook that puts each Markdown sentence on its own line
-docs/development.md             how the workflow, the action and the files on the runner fit together; troubleshooting
-SECURITY.md                     what runs where, with which privileges and tokens
-```
-
 A runner is described by exactly two things:
 
-- **one workflow file** `.github/workflows/runner-<label>.yml`, which names the runner label (e.g. `lbl_laptop`), picks the schedule, and sets any machine-specific inputs (conda location, network interface, ...);
-- **one repository secret** `RESULTS_UPLOAD_TOKEN_<LABEL>` (the label in uppercase, dashes turned into underscores, e.g. `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`), which the workflow file passes to the reusable workflow as `RESULTS_UPLOAD_TOKEN`. Secrets are passed explicitly, never inherited, so a job only ever receives the token of the runner it runs on.
-
-A "situation" is just another workflow file: the same machine can have one file that runs the full suite nightly and another that runs a `--bench` subset hourly, both passing the same secret.
-
-How the pieces fit together (reusable workflow, composite action), where a job writes on the runner machine, the layout of those files and troubleshooting are described in [docs/development.md](docs/development.md).
+- **one workflow file** `.github/workflows/runner-<label>.yml`, which names the runner label (e.g. `lbl_laptop`), picks the schedule, and sets any machine-specific inputs (conda location, network interface, and so on)
+- **one repository secret** `RESULTS_UPLOAD_TOKEN_<LABEL>` (the label in uppercase, dashes turned into underscores, e.g. `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`), which the workflow file passes to the reusable workflow as `RESULTS_UPLOAD_TOKEN`.
+- **Secrets are passed explicitly**, never inherited. A job only ever receives the token of the runner it runs on.
 
 Every job on a runner:
 
