@@ -18,7 +18,6 @@ Each contributor registers one or more of their own machines as self-hosted runn
 - [Configuration reference](#configuration-reference)
   - [Secret (one repository secret per runner)](#secret-one-repository-secret-per-runner)
   - [Workflow inputs](#workflow-inputs)
-- [Files on the runner machine](#files-on-the-runner-machine)
 - [Operational notes](#operational-notes)
 - [Repository checks](#repository-checks)
 - [Troubleshooting](#troubleshooting)
@@ -49,7 +48,7 @@ A runner is described by exactly two things:
 
 A "situation" is just another workflow file: the same machine can have one file that runs the full suite nightly and another that runs a `--bench` subset hourly, both passing the same secret.
 
-How the pieces fit together (reusable workflow, composite action) and where a job writes on the runner machine are described in [docs/development.md](docs/development.md).
+How the pieces fit together (reusable workflow, composite action), where a job writes on the runner machine and the layout of those files are described in [docs/development.md](docs/development.md).
 
 Every job on a runner:
 
@@ -222,19 +221,6 @@ The composite action takes the same inputs with dashes instead of underscores (`
 | `results_branch` | `main` | Branch the results are committed to. |
 
 The manual trigger form of each per-runner workflow exposes `benchmark_pattern`, `nwb_benchmarks_ref`, `debug`, and `upload`; scheduled runs use the full suite, `main`, no debug, and upload.
-
-## Files on the runner machine
-
-Everything lives under `<runner>/_work/_nwb_benchmarks/` (a sibling of the runner's own `_temp` and `_tool` folders); the runner user's real home directory is never written to.
-
-| Path under `_work/_nwb_benchmarks/` | Notes |
-| --- | --- |
-| `home/` | `HOME` for every job step. Holds `.nwb_benchmarks/{results,machines,environments,logs}` written by the suite, `.nwb_benchmarks/runner/pending/` (files waiting for upload; non-empty after a failed upload, the next run uploads them) and `.nwb_benchmarks/runner/uploaded/` (archive, safe to delete), the download cache `.cache/nwb_benchmarks/`, `.asv-machine.json`, and conda's `.conda/`. |
-| `miniforge3/` | conda, installed by the Set up runner workflow; the only conda the jobs use unless `conda_root` says otherwise. Benchmark environments are created inside it and removed at the end of every job unless `keep_conda_env: true`. |
-| `tools/Wireshark.app/` | macOS only: Wireshark copied by the Set up runner workflow; its `tshark` is used automatically. |
-
-The clone of `nwb-benchmarks` lives in the job workspace (`_work/nwb-benchmarks-runner/.../nwb-benchmarks`) and is removed at the end of every job.
-Result files stay owned by the runner's user even after a sudo run; the workflow restores ownership of the whole state directory itself.
 
 ## Operational notes
 
