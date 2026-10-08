@@ -3,7 +3,7 @@
 ## Where a job writes on the runner machine
 
 Everything a job writes stays inside the runner's `_work` folder.
-The first step of every job points `HOME` at `<runner>/_work/_nwb_benchmarks/home`, so the suite's `~/.nwb_benchmarks`, its download cache, `~/.asv-machine.json`, and conda's own files all land there; the conda installation and (on macOS) the Wireshark copy that provide the toolchain live next to it.
+The first step of every job points `HOME` at `<runner>/_work/_nwb_benchmarks/home`, so the suite's `~/.nwb_benchmarks`, its download cache, `~/.asv-machine.json`, and conda's own files all land there; the conda installation, the git and compiler installed when the machine had none, and (on macOS) the Wireshark copy live next to it.
 The runner user's real home directory is never touched.
 
 ### Layout of `_work/_nwb_benchmarks/`
@@ -15,6 +15,8 @@ The folder is a sibling of the runner's own `_temp` and `_tool` folders.
 | `home/` | `HOME` for every job step. Holds `.nwb_benchmarks/{results,machines,environments,logs}` written by the suite, `.nwb_benchmarks/runner/pending/` (files waiting for upload; non-empty after a failed upload, the next run uploads them) and `.nwb_benchmarks/runner/uploaded/` (archive, safe to delete), the download cache `.cache/nwb_benchmarks/`, `.asv-machine.json`, and conda's `.conda/`. |
 | `miniforge3/` | conda, installed by the Set up runner workflow; the only conda the jobs use unless `conda_root` says otherwise. Benchmark environments are created inside it and removed at the end of every job unless `keep_conda_env: true`. |
 | `tools/Wireshark.app/` | macOS only: Wireshark copied by the Set up runner workflow; its `tshark` is used automatically. |
+| `toolchain/` | git and, on Linux, conda-forge's C and C++ compiler, installed from conda-forge by the Set up runner workflow when the machine has none. Its own `bin/` is never put on `PATH`. |
+| `bin/` | Links to `git`, `cc`, `gcc`, `c++` and `g++` in `toolchain/`. The first step of every job puts this folder first on `PATH` and, when it holds the compiler, points `CC` and `CXX` at it. |
 
 The clone of `nwb-benchmarks` lives in the job workspace (`_work/nwb-benchmarks-runner/.../nwb-benchmarks`) and is removed at the end of every job.
 Result files stay owned by the runner's user even after a sudo run; the workflow restores ownership of the whole state directory itself.
@@ -44,7 +46,7 @@ The inputs of the action are the workflow inputs with dashes instead of undersco
 | `No upload token was passed` / `RESULTS_UPLOAD_TOKEN is empty` | The repository secret named in the workflow file's `secrets:` block does not exist (check the spelling: uppercase, underscores), or the workflow file does not pass it. |
 | Push rejected with 403 / authentication failed | The token expired or its owner lacks write access to `results_repository`. Replace the secret. |
 | Network tracking benchmarks skipped or failing | Install tshark or set `tshark_path`; set `network_interface`; grant passwordless sudo (macOS/Linux). |
-| `Passwordless sudo is not available` warning | Pick one of the root options in step 3 of "Adding a runner" in the README, or set `use_sudo: false` to accept skipping the network tracking benchmarks. |
+| `Passwordless sudo is not available` warning | Pick one of the root options in step 2 of "Adding a runner" in the README, or set `use_sudo: false` to accept skipping the network tracking benchmarks. |
 | `Permission denied` under `_work/_nwb_benchmarks` | Leftovers from an interrupted sudo run: `sudo chown -R "$(id -un)" <runner>/_work/_nwb_benchmarks`. |
-| `No such file or directory: 'gcc'` / `Failed to build numcodecs` during `conda env create` | A package in the upstream environment file has no prebuilt wheel for the Python version it pins, so pip compiles it and the machine has no C compiler. Install one (Debian/Ubuntu `sudo apt-get install build-essential`, macOS `xcode-select --install`) or fix the pins in `environments/nwb_benchmarks.yaml` upstream; the **Set up runner** summary shows whether a compiler was found. |
+| `No such file or directory: 'gcc'` / `Failed to build numcodecs` during `conda env create` | A package in the upstream environment file has no prebuilt wheel for the Python version it pins, so pip compiles it and finds no C compiler. On Linux, re-run **Set up runner**, which installs conda-forge's GCC under `_work` when the machine has none; on macOS run `xcode-select --install` once on the machine. If the compile itself fails, fix the pins in `environments/nwb_benchmarks.yaml` upstream. The **Set up runner** summary shows which compiler the jobs use. |
 | `conda env create` fails | Check free disk space and `conda clean --all`; the environment file pins Python and uses `pip` for most packages, so network access to PyPI is required. |

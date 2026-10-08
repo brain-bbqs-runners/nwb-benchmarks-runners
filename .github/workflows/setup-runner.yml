@@ -1,11 +1,12 @@
 # One-time (or any-time) setup of a self-hosted runner. Register the runner first
-# (README step 2), then run this from the Actions tab with the runner's label. It
+# (README step 1), then run this from the Actions tab with the runner's label. It
 #
-#   - installs Miniforge when no conda is found and, on macOS, Wireshark.app (for tshark)
-#     when tshark is not found, both under <runner>/_work/_nwb_benchmarks (nothing global),
+#   - installs, under <runner>/_work/_nwb_benchmarks and without sudo, whatever the machine
+#     lacks of: Miniforge, git, a C and C++ compiler (Linux), and Wireshark.app for tshark
+#     (macOS), so nothing has to be installed on the machine beforehand,
 #   - with root (passwordless sudo or a root runner): installs tshark on Linux and, when asked,
 #     sets up packet capture without root; otherwise prints the commands to run once,
-#   - reports git, a C compiler, conda, tshark, passwordless sudo, the default network interface, and disk,
+#   - reports conda, git, the C compiler, tshark, passwordless sudo, the default network interface, and disk,
 #   - builds the benchmark conda environment once to prove the toolchain works, then removes it,
 #   - writes a summary with the lines to add to the runner's workflow file.
 #
@@ -21,6 +22,11 @@ on:
         type: string
       install_conda:
         description: Install Miniforge when no conda installation is found
+        required: false
+        type: boolean
+        default: true
+      install_toolchain:
+        description: Install git, and on Linux a C and C++ compiler (about 1 GB), from conda-forge under _work when the machine has none
         required: false
         type: boolean
         default: true
@@ -83,6 +89,7 @@ jobs:
       - name: Install requirements
         env:
           INSTALL_CONDA: ${{ inputs.install_conda }}
+          INSTALL_TOOLCHAIN: ${{ inputs.install_toolchain }}
           INSTALL_TSHARK: ${{ inputs.install_tshark }}
           CAPTURE_WITHOUT_ROOT: ${{ inputs.capture_without_root }}
           WIRESHARK_DMG_URL: ${{ inputs.wireshark_dmg_url }}

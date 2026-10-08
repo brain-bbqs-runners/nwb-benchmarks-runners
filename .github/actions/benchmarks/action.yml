@@ -100,7 +100,8 @@ runs:
   using: composite
   steps:
     # Everything the job writes (results, caches, conda) stays under the runner's _work folder:
-    # this points HOME for the remaining steps at <runner>/_work/_nwb_benchmarks/home.
+    # this points HOME for the remaining steps at <runner>/_work/_nwb_benchmarks/home, and puts
+    # the git and compiler that Set up runner installed there (when the machine had none) on PATH.
     - name: Keep all state under the runner's _work folder
       shell: bash
       run: bash "$GITHUB_ACTION_PATH/scripts/localize.sh"
