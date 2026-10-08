@@ -35,7 +35,7 @@ Each contributor registers one or more of their own machines as self-hosted runn
 templates/runner-workflow.yml   copy this file to add a runner
 .pre-commit-config.yaml         formatting and hygiene hooks (`pre-commit run --all-files`)
 scripts/check_sentence_per_line.py   hook that puts each Markdown sentence on its own line
-docs/development.md             how the workflow, the action and the files on the runner fit together; repository checks; troubleshooting
+docs/development.md             how the workflow, the action and the files on the runner fit together; troubleshooting
 SECURITY.md                     what runs where, with which privileges and tokens
 ```
 
@@ -46,7 +46,7 @@ A runner is described by exactly two things:
 
 A "situation" is just another workflow file: the same machine can have one file that runs the full suite nightly and another that runs a `--bench` subset hourly, both passing the same secret.
 
-How the pieces fit together (reusable workflow, composite action), where a job writes on the runner machine, the layout of those files, the repository's own checks and troubleshooting are described in [docs/development.md](docs/development.md).
+How the pieces fit together (reusable workflow, composite action), where a job writes on the runner machine, the layout of those files and troubleshooting are described in [docs/development.md](docs/development.md).
 
 Every job on a runner:
 
