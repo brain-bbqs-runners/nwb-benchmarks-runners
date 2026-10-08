@@ -55,7 +55,7 @@ conda and tshark are installed in step 3.
 First pick the **runner label**: lowercase letters, digits, dashes, and underscores, e.g. `lbl_laptop`.
 It is the one string that ties everything together: the workflow file is `runner-<label>.yml` and selects the machine with `runs-on: [self-hosted, <label>]`, then the secret is `RESULTS_UPLOAD_TOKEN_<LABEL>` (all uppercase characters separate with underscores; e.g., `LBL_LAPTOP`).
 
-Then, in the repository, open **Settings → Actions → Runners → New self-hosted runner**, choose the machine's OS and architecture, then follow all instructions provided by GitHub.
+An admin on the runner repository will then go to **Settings → Actions → Runners → New self-hosted runner**, choose the machine's OS and architecture, then follow all instructions provided by GitHub.
 This process will ask for a number of inputs:
 
 | Prompt | What to enter |
