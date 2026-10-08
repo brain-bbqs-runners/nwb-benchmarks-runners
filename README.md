@@ -150,8 +150,6 @@ A classic token with the `public_repo` scope also works, but is not recommended 
 ### 5. Store the token as a repository secret
 
 A repository administrator adds the token under **Settings → Secrets and variables → Actions → New repository secret**, named `RESULTS_UPLOAD_TOKEN_<LABEL>`: the runner label in uppercase with dashes turned into underscores (`lbl_laptop` → `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`).
-One secret per runner; the token can be the contributor's own or one the administrator creates for that machine.
-Rotating a token means replacing this one secret; nothing on the machine changes.
 
 ### 6. Add the per-runner workflow
 
@@ -162,7 +160,6 @@ Copy `templates/runner-workflow.yml` to `.github/workflows/runner-<label>.yml` a
 - uncomment and fill in the machine inputs your machine needs (see the configuration reference; often none).
 
 Open a pull request to `dev`.
-Scheduled workflows only run from the default branch, so nothing happens until the file is merged.
 
 ### 7. Test it
 
