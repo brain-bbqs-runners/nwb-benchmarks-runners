@@ -1,8 +1,5 @@
 # Development notes
 
-Background for people changing the workflows, the composite action or its scripts.
-The [README](../README.md) covers adding and operating a runner.
-
 ## Where a job writes on the runner machine
 
 Everything a job writes stays inside the runner's `_work` folder.
