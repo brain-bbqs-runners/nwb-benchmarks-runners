@@ -84,9 +84,9 @@ inputs:
     required: false
     default: NeurodataWithoutBorders/nwb-benchmarks-results
   results-branch:
-    description: Branch the results are committed to.
+    description: Branch the results are committed to. Empty uses the default branch of results-repository.
     required: false
-    default: main
+    default: ""
 
 outputs:
   results-count:

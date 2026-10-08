@@ -96,10 +96,10 @@ on:
         type: string
         default: NeurodataWithoutBorders/nwb-benchmarks-results
       results_branch:
-        description: Branch the results are committed to.
+        description: Branch the results are committed to. Empty uses the default branch of results_repository.
         required: false
         type: string
-        default: main
+        default: ""
 
     secrets:
       RESULTS_UPLOAD_TOKEN:

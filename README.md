@@ -142,7 +142,7 @@ The timing benchmarks run normally; the network tracking benchmarks are skipped 
 
 Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with:
 
-- **Repository access**: only the results repository, `NeurodataWithoutBorders/nwb-benchmarks-results`. The token's owner needs write access to it, because results are committed straight to its `main` branch.
+- **Repository access**: only the results repository, `NeurodataWithoutBorders/nwb-benchmarks-results`. The token's owner needs write access to it, because results are committed straight to its default branch (`dev`).
 - **Permissions**: *Contents: Read and write*. Nothing else.
 
 A classic token with the `public_repo` scope also works, but is not recommended for security reasons.
@@ -198,7 +198,7 @@ The composite action takes the same inputs with dashes instead of underscores (`
 | `cache_directory` | under `_work` | Passed to `nwb_benchmarks config_set_cache`; the suite downloads whole NWB files, so point it at a large disk if `_work` is on a small one. |
 | `keep_conda_env` | `false` | Keep the conda environment after the job for inspection. |
 | `results_repository` | `NeurodataWithoutBorders/nwb-benchmarks-results` | Repository the results are committed to; the token needs write access to it. |
-| `results_branch` | `main` | Branch the results are committed to. |
+| `results_branch` | the repository's default branch | Branch the results are committed to. |
 
 The manual trigger form of each per-runner workflow exposes `benchmark_pattern`, `nwb_benchmarks_ref`, `debug`, and `upload`; scheduled runs use the full suite, `main`, no debug, and upload.
 

@@ -61,7 +61,7 @@ jobs:
 
       # --- Upload configuration (defaults to the central results repository) ------------
       # results_repository: <owner>/nwb-benchmarks-results   # e.g. a test repository
-      # results_branch: main
+      # results_branch: dev                                # default branch when omitted
 
       # --- Run options, forwarded from the manual trigger form ------------------------
       # Scheduled runs never use debug mode and always upload.

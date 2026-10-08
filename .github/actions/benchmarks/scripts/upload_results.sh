@@ -12,7 +12,7 @@
 # Inputs (environment variables):
 #   RESULTS_UPLOAD_TOKEN         token with write access to RESULTS_REPOSITORY (required)
 #   RESULTS_REPOSITORY           owner/name to push to (default: NeurodataWithoutBorders/nwb-benchmarks-results)
-#   RESULTS_BRANCH               branch to push to (default: main)
+#   RESULTS_BRANCH               branch to push to (default: the repository's default branch)
 #   RESULTS_COMMIT_AUTHOR_NAME / RESULTS_COMMIT_AUTHOR_EMAIL  identity for the commits
 #   RESULTS_REMOTE_URL           advanced: override the git URL (used by the local tests)
 #   RUNNER_LABEL                 label of this runner, used in commit messages
@@ -27,7 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNNER_LABEL="${RUNNER_LABEL:-$(hostname)}"
 TOKEN="${RESULTS_UPLOAD_TOKEN:-}"
 REPOSITORY="${RESULTS_REPOSITORY:-NeurodataWithoutBorders/nwb-benchmarks-results}"
-BRANCH="${RESULTS_BRANCH:-main}"
+BRANCH="${RESULTS_BRANCH:-}"
 REMOTE_URL="${RESULTS_REMOTE_URL:-https://github.com/$REPOSITORY.git}"
 AUTHOR_NAME="${RESULTS_COMMIT_AUTHOR_NAME:-nwb-benchmarks-runner[bot]}"
 AUTHOR_EMAIL="${RESULTS_COMMIT_AUTHOR_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
@@ -131,8 +131,18 @@ trap cleanup EXIT
 
 # --- Clone --------------------------------------------------------------------------
 rm -rf "$WORKDIR"
-log "Cloning $REMOTE_URL ($BRANCH)"
-authenticated_git clone --quiet --depth 1 --branch "$BRANCH" "$REMOTE_URL" "$WORKDIR"
+# Without an explicit branch, the clone checks out the repository's default branch, and the
+# results are pushed back to that same branch.
+CLONE_ARGS=(--quiet --depth 1)
+if [ -n "$BRANCH" ]; then
+  CLONE_ARGS+=(--branch "$BRANCH")
+fi
+log "Cloning $REMOTE_URL (${BRANCH:-default branch})"
+authenticated_git clone "${CLONE_ARGS[@]}" "$REMOTE_URL" "$WORKDIR"
+if [ -z "$BRANCH" ]; then
+  BRANCH="$(git -C "$WORKDIR" rev-parse --abbrev-ref HEAD)"
+  log "Using the default branch of $REPOSITORY: $BRANCH"
+fi
 
 stage_pending
 if [ "$ADDED_COUNT" -eq 0 ]; then
