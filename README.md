@@ -72,16 +72,6 @@ With root (passwordless sudo for the runner's user, or a root runner) it also in
 It reports what it found, sudo, the default network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works; and ends with a copy-paste block of anything that still needs root on the machine plus the lines to add to the runner's workflow file, if any.
 Re-run it any time to repair a machine; it only installs what is missing.
 
-The installations in detail:
-
-- conda: the workflow installs [Miniforge](https://github.com/conda-forge/miniforge) under `<runner>/_work/_nwb_benchmarks/miniforge3`. A conda already on the machine is deliberately ignored, because its environments would live outside `_work`; to use one anyway, point the `conda_root` input at it.
-- git and a C compiler: when the machine has none, the workflow installs them from conda-forge into `<runner>/_work/_nwb_benchmarks/toolchain`.
-  Only `git` and the compiler commands are linked into `_work/_nwb_benchmarks/bin`, which every job puts first on `PATH`, so nothing else in that folder shadows the machine's own programs.
-  git is required.
-  The compiler is only used when a package in the upstream environment file has no prebuilt wheel for the Python version it pins; on Linux it is conda-forge's GCC, about 1 GB on disk.
-  On macOS a compiler cannot come from conda-forge, because it needs Apple's SDK; if a build ever needs one, run `xcode-select --install` once on the machine.
-- [tshark](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks. The workflow installs it: on macOS it copies `Wireshark.app` under `_work`, where its `tshark` is found automatically; on Linux it installs the distribution package when the runner's user has passwordless sudo, and otherwise prints the command. On Windows install Wireshark and set `tshark_path`.
-
 #### Root for the network tracking benchmarks (optional)
 
 The network tracking benchmarks capture packets with tshark and map them to processes with `psutil.net_connections()`, which needs root on macOS; packet capture needs root or a capture capability on every platform.

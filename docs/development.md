@@ -21,6 +21,16 @@ The folder is a sibling of the runner's own `_temp` and `_tool` folders.
 The clone of `nwb-benchmarks` lives in the job workspace (`_work/nwb-benchmarks-runner/.../nwb-benchmarks`) and is removed at the end of every job.
 Result files stay owned by the runner's user even after a sudo run; the workflow restores ownership of the whole state directory itself.
 
+## What the Set up runner workflow installs
+
+- conda: the workflow installs [Miniforge](https://github.com/conda-forge/miniforge) under `<runner>/_work/_nwb_benchmarks/miniforge3`. A conda already on the machine is deliberately ignored, because its environments would live outside `_work`; to use one anyway, point the `conda_root` input at it.
+- git and a C compiler: when the machine has none, the workflow installs them from conda-forge into `<runner>/_work/_nwb_benchmarks/toolchain`.
+  Only `git` and the compiler commands are linked into `_work/_nwb_benchmarks/bin`, which every job puts first on `PATH`, so nothing else in that folder shadows the machine's own programs.
+  git is required.
+  The compiler is only used when a package in the upstream environment file has no prebuilt wheel for the Python version it pins; on Linux it is conda-forge's GCC, about 1 GB on disk.
+  On macOS a compiler cannot come from conda-forge, because it needs Apple's SDK; if a build ever needs one, run `xcode-select --install` once on the machine.
+- [tshark](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks. The workflow installs it: on macOS it copies `Wireshark.app` under `_work`, where its `tshark` is found automatically; on Linux it installs the distribution package when the runner's user has passwordless sudo, and otherwise prints the command. On Windows install Wireshark and set `tshark_path`.
+
 ## Reusable workflow and composite action
 
 The per-runner file calls the reusable workflow `benchmarks.yml`, which only adds the job-level settings (which runner, one job per runner at a time, timeout) around the **composite action** `.github/actions/benchmarks`.
