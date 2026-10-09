@@ -73,7 +73,8 @@ Try the runner once in the foreground with `./run.sh` (it should print `Listenin
 
 The network tracking benchmarks capture packets with `tshark`, which needs root; on macOS, mapping the packets to processes needs root too.
 The action runs only the `nwb_benchmarks run` command under `sudo -E` and gives the files it wrote back to the runner's user afterwards; conda setup, upload, and cleanup stay unprivileged.
-Grant it with a sudoers drop-in:
+
+Grant it with a `sudoers` drop-in:
 
 ```
 sudo visudo -f /etc/sudoers.d/nwb-benchmarks
