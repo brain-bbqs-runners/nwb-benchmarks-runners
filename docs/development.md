@@ -19,7 +19,7 @@ The folder is a sibling of the runner's own `_temp` and `_tool` folders.
 | `bin/` | Links to `git`, `cc`, `gcc`, `c++` and `g++` in `toolchain/`. The first step of every job puts this folder first on `PATH` and, when it holds the compiler, points `CC` and `CXX` at it. |
 
 The clone of `nwb-benchmarks` lives in the job workspace (`_work/nwb-benchmarks-runner/.../nwb-benchmarks`) and is removed at the end of every job.
-Result files stay owned by the runner's user even after a sudo run; the workflow restores ownership of the whole state directory itself.
+Result files stay owned by the runner's user even after a `sudo` run; the workflow restores ownership of the whole state directory itself.
 
 ## What the Set up runner workflow installs
 
@@ -29,7 +29,7 @@ Result files stay owned by the runner's user even after a sudo run; the workflow
   git is required.
   The compiler is only used when a package in the upstream environment file has no prebuilt wheel for the Python version it pins; on Linux it is conda-forge's GCC, about 1 GB on disk.
   On macOS a compiler cannot come from conda-forge, because it needs Apple's SDK; if a build ever needs one, run `xcode-select --install` once on the machine.
-- [tshark](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks. The workflow installs it: on macOS it copies `Wireshark.app` under `_work`, where its `tshark` is found automatically; on Linux it installs the distribution package when the runner's user has passwordless sudo, and otherwise prints the command. On Windows install Wireshark and set `tshark_path`.
+- [`tshark`](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks. The workflow installs it: on macOS it copies `Wireshark.app` under `_work`, where its `tshark` is found automatically; on Linux it installs the distribution package when the runner's user has passwordless `sudo`, and otherwise prints the command. On Windows install Wireshark and set `tshark_path`.
 
 ## Reusable workflow and composite action
 
@@ -64,8 +64,8 @@ The inputs of the action are the workflow inputs with dashes instead of undersco
 | `No conda installation under .../_work/_nwb_benchmarks/miniforge3` | Run the **Set up runner** workflow for this runner, or set the `conda_root` input to use an installation elsewhere. |
 | `No upload token was passed` / `RESULTS_UPLOAD_TOKEN is empty` | The repository secret named in the workflow file's `secrets:` block does not exist (check the spelling: uppercase, underscores), or the workflow file does not pass it. |
 | Push rejected with 403 / authentication failed | The token expired or its owner lacks write access to `results_repository`. Replace the secret. |
-| Network tracking benchmarks skipped or failing | Install tshark or set `tshark_path`; set `network_interface`; grant passwordless sudo (macOS/Linux). |
-| `Passwordless sudo is not available` warning | Grant it as in step 2 of "Adding a runner" in the README, pick an option under "Without passwordless sudo", or set `use_sudo: false` to accept skipping the network tracking benchmarks. |
-| `Permission denied` under `_work/_nwb_benchmarks` | Leftovers from an interrupted sudo run: `sudo chown -R "$(id -un)" <runner>/_work/_nwb_benchmarks`. |
+| Network tracking benchmarks skipped or failing | Install `tshark` or set `tshark_path`; set `network_interface`; grant passwordless `sudo` (macOS/Linux). |
+| `Passwordless sudo is not available` warning | Grant it as in step 2 of "Adding a runner" in the README, pick an option under "Without passwordless `sudo`", or set `use_sudo: false` to accept skipping the network tracking benchmarks. |
+| `Permission denied` under `_work/_nwb_benchmarks` | Leftovers from an interrupted `sudo` run: `sudo chown -R "$(id -un)" <runner>/_work/_nwb_benchmarks`. |
 | `No such file or directory: 'gcc'` / `Failed to build numcodecs` during `conda env create` | A package in the upstream environment file has no prebuilt wheel for the Python version it pins, so pip compiles it and finds no C compiler. On Linux, re-run **Set up runner**, which installs conda-forge's GCC under `_work` when the machine has none; on macOS run `xcode-select --install` once on the machine. If the compile itself fails, fix the pins in `environments/nwb_benchmarks.yaml` upstream. The **Set up runner** summary shows which compiler the jobs use. |
 | `conda env create` fails | Check free disk space and `conda clean --all`; the environment file pins Python and uses `pip` for most packages, so network access to PyPI is required. |
