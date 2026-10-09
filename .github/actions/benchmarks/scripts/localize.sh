@@ -2,7 +2,8 @@
 # Points HOME for the rest of the job at a directory under the runner's _work folder, so
 # nothing the suite or conda writes (results, caches, ~/.asv-machine.json, ~/.conda) lands
 # in the runner user's real home directory, and points TMPDIR at the runner's _temp folder.
-# Also exports NWB_BENCHMARKS_STATE_DIR.
+# Also exports NWB_BENCHMARKS_STATE_DIR, and puts the git and compiler that the Set up runner
+# workflow installed under _work (when the machine had none) on PATH.
 #
 # Run it as the first step of a job (after checkout); it writes to GITHUB_ENV.
 set -euo pipefail
@@ -29,3 +30,8 @@ mkdir -p "$STATE_DIR/home"
 log "State directory: $STATE_DIR"
 log "HOME for the remaining steps: $STATE_DIR/home"
 log "Temporary files: ${RUNNER_TEMP:-system default}"
+
+use_toolchain
+if [ -d "$(toolchain_bin)" ]; then
+  log "Programs installed under _work, first on PATH: $(cd "$(toolchain_bin)" && printf '%s ' *)"
+fi

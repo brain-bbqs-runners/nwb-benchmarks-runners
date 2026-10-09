@@ -22,6 +22,8 @@ is_windows() {
 
 is_macos() { [ "$(uname -s)" = "Darwin" ]; }
 
+is_linux() { [ "$(uname -s)" = "Linux" ]; }
+
 # Prints "true" or "false" for yes/no style values. Usage: normalize_bool "$value" "<default>"
 normalize_bool() {
   local value
@@ -40,6 +42,9 @@ normalize_bool() {
 #   <runner>/_work/_nwb_benchmarks/home        HOME for every step: ~/.nwb_benchmarks, caches, ~/.asv-machine.json
 #   <runner>/_work/_nwb_benchmarks/miniforge3  conda installed by the Set up runner workflow
 #   <runner>/_work/_nwb_benchmarks/tools       Wireshark.app (macOS), copied by that workflow for its tshark
+#   <runner>/_work/_nwb_benchmarks/toolchain   git and (Linux) a C/C++ compiler from conda-forge, installed by that
+#                                              workflow when the machine has none
+#   <runner>/_work/_nwb_benchmarks/bin         links to just those programs; this, not toolchain/bin, goes on PATH
 #
 # NWB_BENCHMARKS_STATE_DIR overrides the location. Outside a runner (local testing) it
 # falls back to ~/.nwb_benchmarks_runner.
@@ -93,6 +98,30 @@ find_tshark() {
     fi
   done
   return 1
+}
+
+# The Set up runner workflow installs whatever the machine lacks of git and (on Linux) a C/C++
+# compiler into the toolchain prefix and links only those programs into <state>/bin. Putting
+# that directory on PATH, rather than the prefix's own bin, keeps the prefix's other programs
+# (perl, openssl, curl, ...) from shadowing the system's.
+toolchain_prefix() { printf '%s/toolchain\n' "$(state_dir)"; }
+toolchain_bin() { printf '%s/bin\n' "$(state_dir)"; }
+
+# Puts <state>/bin first on PATH and, when it holds a compiler, points CC and CXX at it, for
+# this shell and (through GITHUB_PATH and GITHUB_ENV) for the later steps of the job.
+use_toolchain() {
+  local bin
+  bin="$(toolchain_bin)"
+  [ -d "$bin" ] || return 0
+  case ":$PATH:" in
+    *":$bin:"*) ;;
+    *) export PATH="$bin:$PATH" ;;
+  esac
+  printf '%s\n' "$bin" >> "${GITHUB_PATH:-/dev/null}"
+  if [ -x "$bin/cc" ] && [ -x "$bin/c++" ]; then
+    export CC="$bin/cc" CXX="$bin/c++"
+    printf 'CC=%s\nCXX=%s\n' "$CC" "$CXX" >> "${GITHUB_ENV:-/dev/null}"
+  fi
 }
 
 # Makes `conda activate` available in this non-interactive shell.
