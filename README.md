@@ -39,10 +39,9 @@ Every job on a runner:
 
 ## Adding a runner
 
-Any macOS or Linux machine can be a runner.
-Windows is best effort: it needs Git for Windows for `bash` and cannot run the network tracking benchmarks.
-Nothing has to be installed on the machine beforehand, because the **Set up runner** workflow in step 2 installs everything the jobs need under the runner's `_work` folder.
-The machine should be awake and online at the scheduled times and otherwise idle while the suite runs, since a full run takes hours.
+Any macOS or Linux machine can be a runner without any setup; we recommend utilizing the Windows Subsystem for Linux (WSL) for Windows devices.
+Otherwise, native Windows requires a global Git installation and cannot run the network tracking benchmarks.
+Nothing else has to be installed on the machine beforehand, because the **Set up runner** workflow in step 2 installs everything the jobs need under the runner's `_work` folder.
 
 ### 1. Register the self-hosted runner
 
