@@ -13,9 +13,6 @@ Each contributor registers one or more of their own machines as self-hosted runn
   - [3. Create the upload token](#3-create-the-upload-token)
   - [4. Store the token as a repository secret](#4-store-the-token-as-a-repository-secret)
   - [5. Add the per-runner workflow](#5-add-the-per-runner-workflow)
-  - [6. Test it](#6-test-it)
-- [Configuration reference](#configuration-reference)
-  - [Secret (one repository secret per runner)](#secret-one-repository-secret-per-runner)
   - [Workflow inputs](#workflow-inputs)
 
 ## How it works
