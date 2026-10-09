@@ -151,31 +151,14 @@ A repository administrator adds the token under **Settings → Secrets and varia
 
 Copy `templates/runner-workflow.yml` to `.github/workflows/runner-<label>.yml` and:
 
-- replace every `RUNNER_LABEL` with your label and `RUNNER_SECRET_NAME` with the secret name from step 4;
-- choose a cron schedule (UTC);
-- uncomment and fill in the machine inputs your machine needs (see the configuration reference; often none).
+- replace every `RUNNER_LABEL` with your label and `RUNNER_SECRET_NAME` with the secret name from step 4.
+- choose a cron schedule (UTC).
 
 Open a pull request to `dev`.
 
-### 6. Test it
-
-1. **Actions → Benchmarks (<label>) → Run workflow**, tick **debug**. This runs one repeat of each benchmark with verbose output and uploads nothing. It confirms the runner is online, conda is found, and the suite starts.
-2. Run it again without debug, optionally with a `benchmark_pattern` such as `time_remote_slicing.HDF5PyNWBRemfilePreloadedNoCacheContinuousSliceBenchmark.time_slice` to keep it short.
-   The job summary links to the commit in the results repository.
-
-## Configuration reference
-
-### Secret (one repository secret per runner)
-
-| Secret | Purpose |
-| --- | --- |
-| `RESULTS_UPLOAD_TOKEN_<LABEL>` | Token with write access to `results_repository`. The runner's workflow file passes it as `RESULTS_UPLOAD_TOKEN`; it reaches git as a per-command HTTP header, is never written to disk on the runner, and is masked in logs. |
-
 ### Workflow inputs
 
-Set these under `with:` in `runner-<label>.yml`.
-
-The composite action takes the same inputs with dashes instead of underscores (`conda-root`, `use-sudo`, ...), plus `runner-label` and `results-upload-token`; `timeout_minutes` is job-level and exists only on the workflow.
+If needed, set these under `with:` in `runner-<label>.yml`.
 
 | Input | Default | Purpose |
 | --- | --- | --- |
