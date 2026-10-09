@@ -21,7 +21,7 @@ Each contributor registers one or more of their own machines as self-hosted runn
 
 ## How it works
 
-A runner is described by exactly two things:
+A runner is described by:
 
 - **one workflow file** `.github/workflows/runner-<label>.yml`, which names the runner label (e.g. `lbl_laptop`), picks the schedule, and sets any machine-specific inputs (conda location, network interface, and so on)
 - **one repository secret** `RESULTS_UPLOAD_TOKEN_<LABEL>` (the label in uppercase, dashes turned into underscores, e.g. `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`), which the workflow file passes to the reusable workflow as `RESULTS_UPLOAD_TOKEN`.
