@@ -342,7 +342,7 @@ elif [ "$CAPTURE_WITHOUT_ROOT" = true ] && ! is_macos; then
 else
   SUDO_STATUS="not available for $USER_NAME"
   root_command "sudo sh -c \"printf '$USER_NAME ALL=(ALL) NOPASSWD: ALL\\n' > /etc/sudoers.d/nwb-benchmarks && chmod 0440 /etc/sudoers.d/nwb-benchmarks && visudo -cf /etc/sudoers.d/nwb-benchmarks\""
-  note "Passwordless sudo is not available for $USER_NAME, so the network tracking benchmarks will be skipped or fail. This job cannot grant it to itself; the block below does (full root for that account, see step 2 of Adding a runner in the README for the alternatives)."
+  note "Passwordless sudo is not available for $USER_NAME, so the network tracking benchmarks will be skipped or fail. This job cannot grant it to itself; the block below does (full root for that account, see Without passwordless sudo in the README for the alternatives)."
 fi
 log "sudo: $SUDO_STATUS"
 

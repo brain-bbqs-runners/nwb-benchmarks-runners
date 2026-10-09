@@ -9,11 +9,15 @@ Each contributor registers one or more of their own machines as self-hosted runn
 - [How it works](#how-it-works)
 - [Adding a runner](#adding-a-runner)
   - [1. Register the self-hosted runner](#1-register-the-self-hosted-runner)
-  - [2. Set up the machine with the Set up runner workflow](#2-set-up-the-machine-with-the-set-up-runner-workflow)
-  - [3. Create the upload token](#3-create-the-upload-token)
-  - [4. Store the token as a repository secret](#4-store-the-token-as-a-repository-secret)
-  - [5. Add the per-runner workflow](#5-add-the-per-runner-workflow)
+  - [2. Grant the runner's user passwordless sudo](#2-grant-the-runners-user-passwordless-sudo)
+  - [3. Set up the machine with the Set up runner workflow](#3-set-up-the-machine-with-the-set-up-runner-workflow)
+  - [4. Create the upload token](#4-create-the-upload-token)
+  - [5. Store the token as a repository secret](#5-store-the-token-as-a-repository-secret)
+  - [6. Add the per-runner workflow](#6-add-the-per-runner-workflow)
   - [Workflow inputs](#workflow-inputs)
+- [Other setups (optional)](#other-setups-optional)
+  - [Without passwordless sudo](#without-passwordless-sudo)
+  - [Native Windows](#native-windows)
 
 ## How it works
 
@@ -28,16 +32,17 @@ Every job on a runner:
 1. Fails immediately if it is supposed to upload but no token was passed, so a misnamed secret costs seconds rather than hours.
 2. Clones `nwb-benchmarks` at the requested ref.
 3. Creates a **fresh** conda environment from `environments/nwb_benchmarks.yaml`. Fresh on purpose: the benchmarks track performance against current dependency versions, and the environment id stored with each result is derived from the installed packages.
-4. Runs `nwb_benchmarks run` from the clone, with `sudo -E` when passwordless sudo is available (the network tracking benchmarks need root on macOS and Linux). The console output is saved as a job artifact.
+4. Runs `nwb_benchmarks run` from the clone under `sudo -E`, because the network tracking benchmarks need root. Only this command runs as root, and the console output is saved as a job artifact.
 5. Moves the new files from `~/.nwb_benchmarks/{results,machines,environments}` into `~/.nwb_benchmarks/runner/pending/`.
 6. Clones the results repository, copies in every pending file that is not already there, commits, and pushes with the runner's token (retrying if another runner pushed first). Uploaded files move to `~/.nwb_benchmarks/runner/uploaded/`. If the upload fails, the files stay pending and go with the next run.
-7. Removes the clone and the conda environment, and restores file ownership after a sudo run.
+7. Removes the clone and the conda environment, and gives the files written under sudo back to the runner's user.
 
 ## Adding a runner
 
-Any macOS or Linux machine can be a runner without any setup; we recommend utilizing the Windows Subsystem for Linux (WSL) for Windows devices.
-Otherwise, native Windows requires a global Git installation and cannot run the network tracking benchmarks.
-Nothing else has to be installed on the machine beforehand, because the **Set up runner** workflow in step 2 installs everything the jobs need under the runner's `_work` folder.
+These steps assume a macOS or Linux machine whose runner account can use sudo without a password.
+On a Windows device, use the Windows Subsystem for Linux (WSL).
+Nothing else has to be installed on the machine beforehand, because the **Set up runner** workflow in step 3 installs everything the jobs need under the runner's `_work` folder.
+Machines without passwordless sudo, and native Windows, are covered under [Other setups](#other-setups-optional).
 
 ### 1. Register the self-hosted runner
 
@@ -59,27 +64,15 @@ Labels can be changed later without re-registering: **Settings → Actions → R
 Try the runner once in the foreground with `./run.sh` (it should print `Listening for Jobs`), stop it with Ctrl-C, then install it as a service so it survives reboots:
 
 ```
-./svc.sh install   # runs as the current user; make sure that user owns the conda installation
+./svc.sh install   # runs as the current user, the account that gets passwordless sudo in step 2
 ./svc.sh start
 ./svc.sh status
 ```
 
-### 2. Set up the machine with the Set up runner workflow
+### 2. Grant the runner's user passwordless sudo
 
-Run **Actions → Set up runner → Run workflow** with the runner's label.
-It installs whatever the machine lacks of Miniforge, git, a C and C++ compiler (Linux), and Wireshark for tshark (macOS), all under `<runner>/_work/_nwb_benchmarks` and without sudo.
-With root (passwordless sudo for the runner's user, or a root runner) it also installs tshark on Linux and, with `capture_without_root` ticked, sets up packet capture without root (see below).
-It reports what it found, sudo, the default network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works; and ends with a copy-paste block of anything that still needs root on the machine plus the lines to add to the runner's workflow file, if any.
-Re-run it any time to repair a machine; it only installs what is missing.
-
-#### Root for the network tracking benchmarks (optional)
-
-The network tracking benchmarks capture packets with tshark and map them to processes with `psutil.net_connections()`, which needs root on macOS; packet capture needs root or a capture capability on every platform.
-The timing benchmarks need neither.
-There are three ways to provide root, plus the option of skipping those benchmarks.
-The **Set up runner** workflow tells you where the machine stands: its summary prints the exact commands for whichever of these still needs a person at the machine, and with `capture_without_root` ticked it performs the third option itself once it has root.
-
-**Passwordless sudo for the runner's user (default, works on macOS and Linux).** The action runs only the `nwb_benchmarks run` command under `sudo -E` and gives the files it wrote back to the runner's user afterwards; conda setup, upload, and cleanup stay unprivileged.
+The network tracking benchmarks capture packets with tshark, which needs root; on macOS, mapping the packets to processes needs root too.
+The action runs only the `nwb_benchmarks run` command under `sudo -E` and gives the files it wrote back to the runner's user afterwards; conda setup, upload, and cleanup stay unprivileged.
 Grant it with a sudoers drop-in:
 
 ```
@@ -89,38 +82,19 @@ sudo visudo -f /etc/sudoers.d/nwb-benchmarks
 ```
 
 Confirm with `sudo -n true` as that user (it must print nothing and exit 0).
-`use_sudo: auto` picks this up; set `use_sudo: true` in the runner's workflow file if you want the job to fail rather than continue without root.
+The default `use_sudo: auto` picks this up; set `use_sudo: true` in the runner's workflow file if you want the job to fail rather than continue without root.
 The rule grants full root to that account, so prefer a dedicated user or a dedicated machine.
 Narrowing it to one command is not useful as the action is written: sudo sees `/usr/bin/env`, which it uses to pass `PATH` and `HOME` through, so the rule would have to allow `env` anyway.
 
-**Run the whole runner as root (Linux).** GitHub's `config.sh` refuses to run as root unless you opt in:
+### 3. Set up the machine with the Set up runner workflow
 
-```
-sudo env RUNNER_ALLOW_RUNASROOT=1 ./config.sh --url ... --token ...
-sudo ./svc.sh install root
-sudo ./svc.sh start
-```
+Run **Actions → Set up runner → Run workflow** with the runner's label.
+It installs whatever the machine lacks of Miniforge, git, a C and C++ compiler (Linux), and tshark.
+Everything goes under `<runner>/_work/_nwb_benchmarks`, except tshark on Linux, which comes from the distribution's package manager through the sudo from step 2.
+It reports what it found, sudo, the default network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works; and ends with any lines to add to the runner's workflow file.
+Re-run it any time to repair a machine; it only installs what is missing.
 
-Every step of every job then runs as root, including the upload step that holds the token.
-Install conda for root (or point `conda_root` at an installation root can read) and set `use_sudo: false` so the action does not wrap the command a second time; state lives under `/root/.nwb_benchmarks`.
-On macOS `svc.sh` installs a per-user LaunchAgent, so a root runner is not supported by the installer; use passwordless sudo there.
-
-**No root at all (Linux only).** Give the capture helper the capabilities it needs and let the runner's user use it.
-The **Set up runner** workflow does this when run with `capture_without_root` ticked while the runner's user still has passwordless sudo (grant it, run the workflow, then remove the sudoers line if you want); by hand it is:
-
-```
-sudo setcap cap_net_raw,cap_net_admin+eip "$(command -v dumpcap)"
-sudo usermod -aG wireshark <user>      # Debian/Ubuntu: `sudo dpkg-reconfigure wireshark-common`, answer Yes
-```
-
-Log the user out and in again (or restart the runner service) for the group to apply, and set `use_sudo: false`.
-On Linux `psutil.net_connections()` works without root for the processes the user can inspect, which includes the benchmark process itself.
-On macOS, Wireshark's ChmodBPF and the `access_bpf` group cover packet capture but `psutil.net_connections()` still needs root, so this option does not apply there.
-
-**Skip the network tracking benchmarks.** Set `use_sudo: false` without any of the above.
-The timing benchmarks run normally; the network tracking benchmarks are skipped when tshark is missing and fail when it is present but cannot capture.
-
-### 3. Create the upload token
+### 4. Create the upload token
 
 Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with:
 
@@ -129,15 +103,15 @@ Create a [fine-grained personal access token](https://github.com/settings/person
 
 A classic token with the `public_repo` scope also works, but is not recommended for security reasons.
 
-### 4. Store the token as a repository secret
+### 5. Store the token as a repository secret
 
 A repository administrator adds the token under **Settings → Secrets and variables → Actions → New repository secret**, named `RESULTS_UPLOAD_TOKEN_<LABEL>`: the runner label in uppercase with dashes turned into underscores (`lbl_laptop` → `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`).
 
-### 5. Add the per-runner workflow
+### 6. Add the per-runner workflow
 
 Copy `templates/runner-workflow.yml` to `.github/workflows/runner-<label>.yml` and:
 
-- replace every `RUNNER_LABEL` with your label and `RUNNER_SECRET_NAME` with the secret name from step 4.
+- replace every `RUNNER_LABEL` with your label and `RUNNER_SECRET_NAME` with the secret name from step 5.
 - choose a cron schedule (UTC).
 
 Open a pull request to `dev`.
@@ -166,3 +140,45 @@ If needed, set these under `with:` in `runner-<label>.yml`.
 | `results_branch` | the repository's default branch | Branch the results are committed to. |
 
 The manual trigger form of each per-runner workflow exposes `benchmark_pattern`, `nwb_benchmarks_ref`, `debug`, and `upload`; scheduled runs use the full suite, `main`, no debug, and upload.
+
+## Other setups (optional)
+
+### Without passwordless sudo
+
+Only the network tracking benchmarks need root; the timing benchmarks run either way.
+When the runner's user cannot have passwordless sudo, pick one of these.
+The **Set up runner** summary then prints the exact commands that still need a person at the machine.
+
+**Run the whole runner as root (Linux).** GitHub's `config.sh` refuses to run as root unless you opt in:
+
+```
+sudo env RUNNER_ALLOW_RUNASROOT=1 ./config.sh --url ... --token ...
+sudo ./svc.sh install root
+sudo ./svc.sh start
+```
+
+Every step of every job then runs as root, including the upload step that holds the token.
+Set `use_sudo: false` so the action does not wrap the command a second time; the Set up runner workflow, run on that runner, installs everything under `_work` as before.
+On macOS `svc.sh` installs a per-user LaunchAgent, so a root runner is not supported by the installer; use passwordless sudo there.
+
+**Capture without root (Linux).** Give the capture helper the capabilities it needs and let the runner's user use it.
+The **Set up runner** workflow does this when run with `capture_without_root` ticked while the runner's user still has passwordless sudo: grant it as in step 2 for that one run, then remove the sudoers line.
+By hand it is:
+
+```
+sudo setcap cap_net_raw,cap_net_admin+eip "$(command -v dumpcap)"
+sudo usermod -aG wireshark <user>      # Debian/Ubuntu: `sudo dpkg-reconfigure wireshark-common`, answer Yes
+```
+
+Log the user out and in again (or restart the runner service) for the group to apply, and set `use_sudo: false`.
+On Linux `psutil.net_connections()` works without root for the processes the user can inspect, which includes the benchmark process itself.
+On macOS, Wireshark's ChmodBPF and the `access_bpf` group cover packet capture but `psutil.net_connections()` still needs root, so this option does not apply there.
+
+**Skip the network tracking benchmarks.** Set `use_sudo: false` without any of the above.
+The timing benchmarks run normally; the network tracking benchmarks are skipped when tshark is missing and fail when it is present but cannot capture.
+
+### Native Windows
+
+Native Windows is best effort.
+It needs Git for Windows, whose `bash` the jobs run in, and a Miniforge installed by hand under `<runner>\_work\_nwb_benchmarks\miniforge3` (or named with `conda_root`), since the **Set up runner** workflow cannot install one there.
+The network tracking benchmarks do not run.
