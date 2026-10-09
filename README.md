@@ -82,9 +82,11 @@ sudo visudo -f /etc/sudoers.d/nwb-benchmarks
 ```
 
 Confirm with `sudo -n true` as that user (it must print nothing and exit 0).
-The default `use_sudo: auto` picks this up; set `use_sudo: true` in the runner's workflow file if you want the job to fail rather than continue without root.
-The rule grants full root to that account, so prefer a dedicated user or a dedicated machine.
-Narrowing it to one command is not useful as the action is written: `sudo` sees `/usr/bin/env`, which it uses to pass `PATH` and `HOME` through, so the rule would have to allow `env` anyway.
+
+Other details:
+- The default `use_sudo: auto` picks this up; set `use_sudo: true` in the runner's workflow file if you want the job to fail rather than continue without root.
+- The rule grants full root to that account, so prefer a dedicated user or a dedicated machine.
+- Narrowing it to one command is not useful as the action is written; `sudo` sees `/usr/bin/env`, which it uses to pass `PATH` and `HOME` through, so the rule would have to allow `env` anyway.
 
 ### 3. Set up the machine with the Set up runner workflow
 
