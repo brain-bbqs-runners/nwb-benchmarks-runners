@@ -4,6 +4,8 @@
 #
 #   - Miniforge into <state>/miniforge3 when none is there yet (a conda elsewhere on the
 #     machine is ignored on purpose: its environments would live outside _work)
+#   - git when the machine has none, and on Linux a C and C++ compiler when it has none, from
+#     conda-forge into <state>/toolchain, with only those programs linked into <state>/bin
 #   - macOS: Wireshark.app, which contains tshark, into <state>/tools when tshark is not found
 #
 # Two things need root and are done when the job has it (passwordless sudo for the runner's
@@ -17,7 +19,7 @@
 # Granting passwordless sudo itself always needs a person at the machine; the summary prints
 # the exact sudoers command. Windows: tshark is reported only.
 #
-# It then reports git, a C compiler, conda, tshark, passwordless sudo, the default network
+# It then reports conda, git, the C compiler, tshark, passwordless sudo, the default network
 # interface and disk space, together with the lines to add to the runner's workflow file.
 # Safe to re-run; it only installs what is missing.
 #
@@ -25,6 +27,8 @@
 #
 # Inputs (environment variables):
 #   INSTALL_CONDA       "true" (default) installs Miniforge under _work when it is not there yet
+#   INSTALL_TOOLCHAIN   "true" (default) installs git, and on Linux a C/C++ compiler, under _work
+#                       when the machine has none
 #   INSTALL_TSHARK      "true" (default) installs tshark when it is not found (macOS: Wireshark.app
 #                       under _work; Linux: distribution package, needs root)
 #   CAPTURE_WITHOUT_ROOT "true" sets up packet capture without root on Linux (needs root once)
@@ -37,6 +41,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/common.sh"
 
 INSTALL_CONDA="$(normalize_bool "${INSTALL_CONDA:-}" true)"
+INSTALL_TOOLCHAIN="$(normalize_bool "${INSTALL_TOOLCHAIN:-}" true)"
 INSTALL_TSHARK="$(normalize_bool "${INSTALL_TSHARK:-}" true)"
 CAPTURE_WITHOUT_ROOT="$(normalize_bool "${CAPTURE_WITHOUT_ROOT:-}" false)"
 LABEL="${RUNNER_LABEL:-${RUNNER_NAME:-$(hostname)}}"
@@ -74,38 +79,6 @@ root_command() { ROOT_COMMANDS+=("$*"); }
 
 log "State directory (everything below lives here): $STATE_DIR"
 
-# --- git ----------------------------------------------------------------------------
-group_start "git"
-if command -v git > /dev/null 2>&1; then
-  GIT_STATUS="$(git --version)"
-  log "$GIT_STATUS"
-else
-  die "git is not installed. On macOS run 'xcode-select --install'; on Linux install it with the package manager. Then re-run this workflow."
-fi
-group_end
-
-# --- C compiler ---------------------------------------------------------------------
-# Only checked, not installed: like git it is a system tool. pip needs it for any Python
-# package that has no prebuilt wheel for the Python version pinned by nwb-benchmarks.
-group_start "C compiler"
-CC_STATUS="not found"
-if is_windows; then
-  CC_STATUS="not checked on Windows"
-else
-  for candidate in cc gcc clang; do
-    if cc_bin="$(command -v "$candidate" 2> /dev/null)"; then
-      CC_STATUS="$("$cc_bin" --version 2> /dev/null | head -n 1 || true) at \`$cc_bin\`"
-      break
-    fi
-  done
-  if [ "$CC_STATUS" = "not found" ]; then
-    warn "No C compiler (cc, gcc or clang) was found. Building the benchmark environment fails whenever a package has no prebuilt wheel for its Python version."
-    note "No C compiler (cc, gcc or clang) was found. Building the benchmark environment fails whenever a package has no prebuilt wheel for its Python version (pip then reports \`No such file or directory: 'gcc'\`). Install one if that happens: Debian/Ubuntu \`sudo apt-get install build-essential\`, Fedora \`sudo dnf install gcc\`, macOS \`xcode-select --install\`."
-  fi
-fi
-log "C compiler: $CC_STATUS"
-group_end
-
 # --- conda --------------------------------------------------------------------------
 group_start "conda"
 conda_root=""
@@ -142,6 +115,117 @@ if [ -n "$conda_root" ]; then
     note "conda is outside _work; keep \`conda_root: $conda_root\` in the runner's workflow file (set it if it is not there yet)."
   fi
 fi
+group_end
+
+# --- git and a C compiler -------------------------------------------------------------
+# What the machine lacks of these comes from conda-forge into the toolchain prefix under
+# _work; only git and the compiler drivers are linked into <state>/bin, which every job puts
+# first on PATH (see use_toolchain in common.sh). git is required: the jobs clone
+# nwb-benchmarks and push the results with it. The compiler is insurance: pip only needs one
+# for a package without a prebuilt wheel for the Python version nwb-benchmarks pins. On
+# macOS it cannot come from conda-forge, because it needs Apple's SDK, which only the Xcode
+# Command Line Tools provide; there the summary says how to get them if a build ever needs it.
+
+# True when the Xcode Command Line Tools are missing. Their /usr/bin stubs (git, cc, ...)
+# then only ask for the tools to be installed, so they do not count.
+macos_without_clt() { is_macos && ! xcode-select -p > /dev/null 2>&1; }
+
+# Prints the git that works on this machine, if any.
+working_git() {
+  local git_bin
+  git_bin="$(command -v git 2> /dev/null)" || return 1
+  if [ "$git_bin" = /usr/bin/git ] && macos_without_clt; then
+    return 1
+  fi
+  "$git_bin" --version > /dev/null 2>&1 || return 1
+  printf '%s\n' "$git_bin"
+}
+
+# Prints the C compiler that works on this machine, if any.
+working_cc() {
+  local candidate cc_bin
+  macos_without_clt && return 1
+  for candidate in cc gcc clang; do
+    cc_bin="$(command -v "$candidate" 2> /dev/null)" || continue
+    if "$cc_bin" --version > /dev/null 2>&1; then
+      printf '%s\n' "$cc_bin"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Installs the given conda-forge packages into the toolchain prefix and links git and the
+# compiler drivers they provide into <state>/bin.
+install_toolchain() {
+  local prefix bin candidate
+  prefix="$(toolchain_prefix)"
+  bin="$(toolchain_bin)"
+  log "Installing from conda-forge into $prefix: $*"
+  if [ -d "$prefix/conda-meta" ]; then
+    conda install --yes --quiet --override-channels --channel conda-forge --prefix "$prefix" "$@"
+  else
+    conda create --yes --quiet --override-channels --channel conda-forge --prefix "$prefix" "$@"
+  fi
+  mkdir -p "$bin"
+  if [ -x "$prefix/bin/git" ]; then
+    ln -sf "$prefix/bin/git" "$bin/git"
+  fi
+  for candidate in "$prefix"/bin/*-conda-linux-gnu-cc; do
+    [ -x "$candidate" ] || continue
+    ln -sf "$candidate" "$bin/cc"
+    ln -sf "$candidate" "$bin/gcc"
+  done
+  for candidate in "$prefix"/bin/*-conda-linux-gnu-c++; do
+    [ -x "$candidate" ] || continue
+    ln -sf "$candidate" "$bin/c++"
+    ln -sf "$candidate" "$bin/g++"
+  done
+  note "Installed from conda-forge into \`$prefix\`: $*. The benchmarks action puts them on PATH by itself."
+}
+
+group_start "git and a C compiler"
+# Programs installed by an earlier run of this workflow count as present.
+use_toolchain
+TOOLCHAIN_PACKAGES=()
+if ! is_windows && ! working_git > /dev/null; then
+  TOOLCHAIN_PACKAGES+=(git)
+fi
+if is_linux && ! working_cc > /dev/null; then
+  TOOLCHAIN_PACKAGES+=(c-compiler cxx-compiler)
+fi
+if [ "${#TOOLCHAIN_PACKAGES[@]}" -gt 0 ]; then
+  if [ "$INSTALL_TOOLCHAIN" != true ]; then
+    log "Not installing ${TOOLCHAIN_PACKAGES[*]} because install_toolchain is false."
+  elif [ -z "$conda_root" ]; then
+    warn "Cannot install ${TOOLCHAIN_PACKAGES[*]} without a conda installation."
+  else
+    install_toolchain "${TOOLCHAIN_PACKAGES[@]}"
+    use_toolchain
+  fi
+fi
+
+if git_bin="$(working_git)"; then
+  GIT_STATUS="$("$git_bin" --version) at \`$git_bin\`"
+  log "$GIT_STATUS"
+elif is_windows; then
+  die "git was not found. Install Git for Windows (https://gitforwindows.org), which also provides the bash the jobs run in, and re-run this workflow."
+else
+  die "git was not found and could not be installed under _work; see the messages above. Run this workflow again with install_conda and install_toolchain ticked."
+fi
+
+if is_windows; then
+  CC_STATUS="not checked on Windows"
+elif cc_bin="$(working_cc)"; then
+  CC_STATUS="$("$cc_bin" --version 2> /dev/null | head -n 1 || true) at \`$cc_bin\`"
+elif is_macos; then
+  CC_STATUS="none (the Xcode Command Line Tools are not installed)"
+  note "There is no C compiler, because the Xcode Command Line Tools are not installed. Building the benchmark environment only needs one when a package has no prebuilt wheel for the Python version nwb-benchmarks pins (pip then reports \`No such file or directory: 'gcc'\` or similar). Apple's SDK cannot be installed under \`_work\`, so if that happens run \`xcode-select --install\` once on the machine."
+else
+  CC_STATUS="not found"
+  warn "No C compiler was found or installed. Building the benchmark environment fails whenever a package has no prebuilt wheel for its Python version."
+fi
+log "C compiler: $CC_STATUS"
 group_end
 
 # --- tshark -------------------------------------------------------------------------
@@ -258,7 +342,7 @@ elif [ "$CAPTURE_WITHOUT_ROOT" = true ] && ! is_macos; then
 else
   SUDO_STATUS="not available for $USER_NAME"
   root_command "sudo sh -c \"printf '$USER_NAME ALL=(ALL) NOPASSWD: ALL\\n' > /etc/sudoers.d/nwb-benchmarks && chmod 0440 /etc/sudoers.d/nwb-benchmarks && visudo -cf /etc/sudoers.d/nwb-benchmarks\""
-  note "Passwordless sudo is not available for $USER_NAME, so the network tracking benchmarks will be skipped or fail. This job cannot grant it to itself; the block below does (full root for that account, see \"Root and sudo\" in the README for the alternatives)."
+  note "Passwordless sudo is not available for $USER_NAME, so the network tracking benchmarks will be skipped or fail. This job cannot grant it to itself; the block below does (full root for that account, see Without passwordless sudo in the README for the alternatives)."
 fi
 log "sudo: $SUDO_STATUS"
 
@@ -326,9 +410,9 @@ SECRET_NAME="RESULTS_UPLOAD_TOKEN_$(printf '%s' "$LABEL" | tr 'a-z-' 'A-Z_')"
   echo "| System | $(uname -s) $(uname -m), $(uname -r) |"
   echo "| Runner user | $USER_NAME |"
   echo "| State directory | \`$STATE_DIR\` |"
+  echo "| conda | $CONDA_STATUS |"
   echo "| git | $GIT_STATUS |"
   echo "| C compiler | $CC_STATUS |"
-  echo "| conda | $CONDA_STATUS |"
   echo "| tshark | $TSHARK_STATUS |"
   echo "| Passwordless sudo | $SUDO_STATUS |"
   if [ -n "$CAPTURE_STATUS" ]; then

@@ -1,141 +1,56 @@
 # NWB Benchmarks (Runners)
 
-Scheduled runs of the [NWB Benchmarks](https://github.com/NeurodataWithoutBorders/nwb-benchmarks) suite on
-self-hosted GitHub Actions runners, with the results committed to
-[nwb-benchmarks-results](https://github.com/NeurodataWithoutBorders/nwb-benchmarks-results).
+Scheduled runs of the [NWB Benchmarks](https://github.com/NeurodataWithoutBorders/nwb-benchmarks) suite on self-hosted GitHub Actions runners, with the results committed to [nwb-benchmarks-results](https://github.com/NeurodataWithoutBorders/nwb-benchmarks-results).
 
-Each contributor registers one or more of their own machines as self-hosted runners of this repository, gives
-every runner a label, and adds a small workflow file that decides when that runner benchmarks and how the machine
-is configured. Every runner uploads with its own token, stored as a separate repository secret, so many people can
-feed the central results repository without running a server and without any one token being shared between
-machines. (The PythonAnywhere upload server that `nwb_benchmarks run` used to
-post to has been retired; these workflows replace it, and
-[NeurodataWithoutBorders/nwb-benchmarks#198](https://github.com/NeurodataWithoutBorders/nwb-benchmarks/pull/198)
-removes the old uploader from the suite.)
+Each contributor registers one or more of their own machines as self-hosted runners of this repository, gives every runner a unique label, and registers a workflow file that determines when to run the benchmarks with a particular configuration.
 
 ## Contents
 
 - [How it works](#how-it-works)
 - [Adding a runner](#adding-a-runner)
-  - [1. Prepare the machine](#1-prepare-the-machine)
-  - [2. Register the self-hosted runner](#2-register-the-self-hosted-runner)
-  - [3. Create the upload token](#3-create-the-upload-token)
-  - [4. Store the token as a repository secret](#4-store-the-token-as-a-repository-secret)
-  - [5. Add the per-runner workflow](#5-add-the-per-runner-workflow)
-  - [6. Test it](#6-test-it)
-- [Root and sudo](#root-and-sudo)
-- [Configuration reference](#configuration-reference)
-  - [Secret (one repository secret per runner)](#secret-one-repository-secret-per-runner)
+  - [1. Register the self-hosted runner](#1-register-the-self-hosted-runner)
+  - [2. Grant the runner's user passwordless `sudo`](#2-grant-the-runners-user-passwordless-sudo)
+  - [3. Set up the machine with the Set up runner workflow](#3-set-up-the-machine-with-the-set-up-runner-workflow)
+  - [4. Create the upload token](#4-create-the-upload-token)
+  - [5. Store the token as a repository secret](#5-store-the-token-as-a-repository-secret)
+  - [6. Add the per-runner workflow](#6-add-the-per-runner-workflow)
   - [Workflow inputs](#workflow-inputs)
-- [Files on the runner machine](#files-on-the-runner-machine)
-- [Operational notes](#operational-notes)
-- [Security](#security)
-- [Troubleshooting](#troubleshooting)
+- [Other setups (optional)](#other-setups-optional)
+  - [Without passwordless `sudo`](#without-passwordless-sudo)
+  - [Native Windows](#native-windows)
 
 ## How it works
 
-```
-.github/actions/benchmarks/
-  action.yml             composite action with all the steps (clone, conda env, run, upload, clean up)
-  scripts/               the shell scripts the action runs on the self-hosted machine
-.github/workflows/
-  benchmarks.yml         reusable workflow: job-level settings (runner, concurrency, timeout) around the action
-  runner-<label>.yml     one per runner or situation: schedule, runner label, machine config, token secret
-  setup-runner.yml       manual: install conda (and tshark on macOS) under _work, check sudo, build the env once
-  lint.yml               actionlint + shellcheck + action validation, on GitHub-hosted runners only
-templates/runner-workflow.yml   copy this file to add a runner
-```
+A runner is described by:
 
-A runner is described by exactly two things:
-
-- **one workflow file** `.github/workflows/runner-<label>.yml`, which names the runner label (e.g. `lbl_laptop`),
-  picks the schedule, and sets any machine-specific inputs (conda location, network interface, ...);
-- **one repository secret** `RESULTS_UPLOAD_TOKEN_<LABEL>` (the label in uppercase, dashes turned into
-  underscores, e.g. `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`), which the workflow file passes to the reusable workflow as
-  `RESULTS_UPLOAD_TOKEN`. Secrets are passed explicitly, never inherited, so a job only ever receives the token
-  of the runner it runs on.
-
-A "situation" is just another workflow file: the same machine can have one file that runs the full suite
-nightly and another that runs a `--bench` subset hourly, both passing the same secret.
-
-Everything a job writes stays inside the runner's `_work` folder. The first step of every job points `HOME`
-at `<runner>/_work/_nwb_benchmarks/home`, so the suite's `~/.nwb_benchmarks`, its download cache,
-`~/.asv-machine.json`, and conda's own files all land there; the conda installation and (on macOS) the Wireshark
-copy that provide the toolchain live next to it. The runner user's real home directory is never touched.
-
-The per-runner file calls the reusable workflow `benchmarks.yml`, which only adds the job-level settings
-(which runner, one job per runner at a time, timeout) around the **composite action**
-`.github/actions/benchmarks`. The action holds every step and its shell scripts, so it can also be used on
-its own from any workflow, in this repository or another one:
-
-```yaml
-steps:
-  - uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
-    with:
-      runner-label: lbl_laptop
-      results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN_LBL_LAPTOP }}
-      # same options as the workflow inputs below, with dashes instead of underscores
-```
+- **one workflow file** `.github/workflows/runner-<label>.yml`, which names the runner label (e.g. `lbl_laptop`), picks the schedule, and sets any machine-specific inputs (conda location, network interface, and so on)
+- **one repository secret** `RESULTS_UPLOAD_TOKEN_<LABEL>` (the label in uppercase, dashes turned into underscores, e.g. `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`), which the workflow file passes to the reusable workflow as `RESULTS_UPLOAD_TOKEN`.
+- **Secrets are passed explicitly**, never inherited. A job only ever receives the token of the runner it runs on.
 
 Every job on a runner:
 
-1. Fails immediately if it is supposed to upload but no token was passed, so a misnamed secret costs seconds
-   rather than hours.
+1. Fails immediately if it is supposed to upload but no token was passed, so a misnamed secret costs seconds rather than hours.
 2. Clones `nwb-benchmarks` at the requested ref.
-3. Creates a **fresh** conda environment from `environments/nwb_benchmarks.yaml`. Fresh on purpose: the
-   benchmarks track performance against current dependency versions, and the environment id stored with each
-   result is derived from the installed packages.
-4. Runs `nwb_benchmarks run` from the clone, with `sudo -E` when passwordless sudo is available (the network
-   tracking benchmarks need root on macOS and Linux). The console output is saved as a job artifact.
-5. Moves the new files from `~/.nwb_benchmarks/{results,machines,environments}` into
-   `~/.nwb_benchmarks/runner/pending/`.
-6. Clones the results repository, copies in every pending file that is not already there, commits, and pushes
-   with the runner's token (retrying if another runner pushed first). Uploaded files move to
-   `~/.nwb_benchmarks/runner/uploaded/`. If the upload fails, the files stay pending and go with the next run.
-7. Removes the clone and the conda environment, and restores file ownership after a sudo run.
+3. Creates a **fresh** conda environment from `environments/nwb_benchmarks.yaml`. Fresh on purpose: the benchmarks track performance against current dependency versions, and the environment id stored with each result is derived from the installed packages.
+4. Runs `nwb_benchmarks run` from the clone under `sudo -E`, because the network tracking benchmarks need root. Only this command runs as root, and the console output is saved as a job artifact.
+5. Moves the new files from `~/.nwb_benchmarks/{results,machines,environments}` into `~/.nwb_benchmarks/runner/pending/`.
+6. Clones the results repository, copies in every pending file that is not already there, commits, and pushes with the runner's token (retrying if another runner pushed first). Uploaded files move to `~/.nwb_benchmarks/runner/uploaded/`. If the upload fails, the files stay pending and go with the next run.
+7. Removes the clone and the conda environment, and gives the files written under `sudo` back to the runner's user.
 
 ## Adding a runner
 
-### 1. Prepare the machine
+These steps assume a macOS or Linux machine whose runner account can use `sudo` without a password.
+On a Windows device, use the Windows Subsystem for Linux (WSL).
+Nothing else has to be installed on the machine beforehand, because the **Set up runner** workflow in step 3 installs everything the jobs need under the runner's `_work` folder.
+Machines without passwordless `sudo`, and native Windows, are covered under [Other setups](#other-setups-optional).
 
-- macOS or Linux. Windows is best effort: it needs Git for Windows (for `bash`) and cannot run the
-  network tracking benchmarks, which need root.
-- `git`.
-- A C compiler (`gcc` or `clang`; macOS: `xcode-select --install`, Debian/Ubuntu: `sudo apt-get install
-  build-essential`). pip needs it whenever a package in the upstream environment file has no prebuilt wheel for
-  the Python version it pins; without one, building the benchmark environment fails on that package.
-- conda: the **Set up runner** workflow (below) installs [Miniforge](https://github.com/conda-forge/miniforge)
-  under `<runner>/_work/_nwb_benchmarks/miniforge3`. A conda already on the machine is deliberately ignored,
-  because its environments would live outside `_work`; to use one anyway, point the `conda_root` input at it.
-- [tshark](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks. The
-  **Set up runner** workflow installs it: on macOS it copies `Wireshark.app` under `_work`, where its `tshark`
-  is found automatically; on Linux it installs the distribution package when the runner's user has passwordless
-  sudo, and otherwise prints the command. On Windows install Wireshark and set `tshark_path`.
-- Root for the network tracking benchmarks, in one of the forms described under "Root and sudo" below
-  (passwordless sudo is the usual choice). Without it the network tracking benchmarks are skipped or fail while
-  the timing benchmarks still run.
-- The machine must be awake and online at the scheduled times and should otherwise be idle while the suite runs;
-  a full run takes hours.
+### 1. Register the self-hosted runner
 
-Most of this can be done for you: after registering the runner (step 2), run **Actions → Set up runner → Run
-workflow** with the runner's label. It installs Miniforge when no conda is found and, on macOS, Wireshark when
-tshark is missing, both under `<runner>/_work/_nwb_benchmarks` and without sudo. With root (passwordless sudo
-for the runner's user, or a root runner) it also installs tshark on Linux and, with `capture_without_root`
-ticked, sets up packet capture without root (see "Root and sudo"). It reports the C compiler, sudo, the default
-network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works;
-and ends with a copy-paste block of anything that still needs root on the machine plus the lines to add to
-the runner's workflow file, if any. Re-run it any time to repair a machine; it only installs what is missing.
+First pick the **runner label**: lowercase letters, digits, dashes, and underscores, e.g. `lbl_laptop`.
+It is the one string that ties everything together: the workflow file is `runner-<label>.yml` and selects the machine with `runs-on: [self-hosted, <label>]`, then the secret is `RESULTS_UPLOAD_TOKEN_<LABEL>` (all uppercase characters separate with underscores; e.g., `LBL_LAPTOP`).
 
-### 2. Register the self-hosted runner
-
-First pick the **runner label**: lowercase letters, digits, dashes, and underscores, e.g. `lbl_laptop`. It is
-the one string that ties everything together: the workflow file is `runner-<label>.yml` and selects the
-machine with `runs-on: [self-hosted, <label>]`, and the secret is `RESULTS_UPLOAD_TOKEN_<LABEL>`. The
-existing `runner-*.yml` files in `.github/workflows/` show real ones.
-
-Then, in the repository, open **Settings → Actions → Runners → New self-hosted runner**, choose the machine's
-OS and architecture, and run the download and `./config.sh --url ... --token ...` commands GitHub shows, as the
-user who owns the conda installation (not root; see "Root and sudo" below). `config.sh` asks four questions:
+An admin on the runner repository will then go to **Settings → Actions → Runners → New self-hosted runner**, choose the machine's OS and architecture, then follow all instructions provided by GitHub.
+This process will ask for a number of inputs:
 
 | Prompt | What to enter |
 | --- | --- |
@@ -146,69 +61,20 @@ user who owns the conda installation (not root; see "Root and sudo" below). `con
 
 Labels can be changed later without re-registering: **Settings → Actions → Runners → (runner) → Labels**.
 
-Try the runner once in the foreground with `./run.sh` (it should print `Listening for Jobs`), stop it with
-Ctrl-C, then install it as a service so it survives reboots:
+Try the runner once in the foreground with `./run.sh` (it should print `Listening for Jobs`), stop it with Ctrl-C, then install it as a service so it survives reboots:
 
 ```
-./svc.sh install   # runs as the current user; make sure that user owns the conda installation
+./svc.sh install   # runs as the current user, the account that gets passwordless sudo in step 2
 ./svc.sh start
 ./svc.sh status
 ```
 
-Only `schedule` and `workflow_dispatch` events ever reach the self-hosted runners (see Security below).
+### 2. Grant the runner's user passwordless `sudo`
 
-### 3. Create the upload token
+The network tracking benchmarks capture packets with `tshark`, which needs root; on macOS, mapping the packets to processes needs root too.
+The action runs only the `nwb_benchmarks run` command under `sudo -E` and gives the files it wrote back to the runner's user afterwards; conda setup, upload, and cleanup stay unprivileged.
 
-Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with:
-
-- **Repository access**: only the results repository, `NeurodataWithoutBorders/nwb-benchmarks-results`. The
-  token's owner needs write access to it, because results are committed straight to its default branch (`dev`).
-- **Permissions**: *Contents: Read and write*. Nothing else.
-- An expiration you keep track of: when the token expires, uploads fail with an authentication error until you
-  store a new one. Result files are never lost; they stay pending on the machine.
-
-A classic token with the `public_repo` scope also works.
-
-### 4. Store the token as a repository secret
-
-A repository administrator adds the token under **Settings → Secrets and variables → Actions → New repository
-secret**, named `RESULTS_UPLOAD_TOKEN_<LABEL>`: the runner label in uppercase with dashes turned into
-underscores (`lbl_laptop` → `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`). One secret per runner; the token can be the
-contributor's own or one the administrator creates for that machine. Rotating a token means replacing this one
-secret; nothing on the machine changes.
-
-### 5. Add the per-runner workflow
-
-Copy `templates/runner-workflow.yml` to `.github/workflows/runner-<label>.yml` and:
-
-- replace every `RUNNER_LABEL` with your label and `RUNNER_SECRET_NAME` with the secret name from step 4;
-- choose a cron schedule (UTC);
-- uncomment and fill in the machine inputs your machine needs (see the configuration reference; often none).
-
-Open a pull request to `dev`. Scheduled workflows only run from the default branch, so nothing happens until
-the file is merged.
-
-### 6. Test it
-
-1. **Actions → Benchmarks (<label>) → Run workflow**, tick **debug**. This runs one repeat of each benchmark
-   with verbose output and uploads nothing. It confirms the runner is online, conda is found, and the suite
-   starts.
-2. Run it again without debug, optionally with a `benchmark_pattern` such as
-   `time_remote_slicing.HDF5PyNWBRemfilePreloadedNoCacheContinuousSliceBenchmark.time_slice` to keep it short.
-   The job summary links to the commit in the results repository.
-
-## Root and sudo
-
-The network tracking benchmarks capture packets with tshark and map them to processes with
-`psutil.net_connections()`, which needs root on macOS; packet capture needs root or a capture capability on
-every platform. The timing benchmarks need neither. There are three ways to provide root, plus the option of
-skipping those benchmarks. The **Set up runner** workflow tells you where the machine stands: its summary
-prints the exact commands for whichever of these still needs a person at the machine, and with
-`capture_without_root` ticked it performs the third option itself once it has root.
-
-**Passwordless sudo for the runner's user (default, works on macOS and Linux).** The action runs only the
-`nwb_benchmarks run` command under `sudo -E` and gives the files it wrote back to the runner's user afterwards;
-conda setup, upload, and cleanup stay unprivileged. Grant it with a sudoers drop-in:
+Grant it with a `sudoers` drop-in:
 
 ```
 sudo visudo -f /etc/sudoers.d/nwb-benchmarks
@@ -216,58 +82,47 @@ sudo visudo -f /etc/sudoers.d/nwb-benchmarks
 <user> ALL=(ALL) NOPASSWD: ALL
 ```
 
-Confirm with `sudo -n true` as that user (it must print nothing and exit 0). `use_sudo: auto` picks this up;
-set `use_sudo: true` in the runner's workflow file if you want the job to fail rather than continue without
-root. The rule grants full root to that account, so prefer a dedicated user or a dedicated machine. Narrowing
-it to one command is not useful as the action is written: sudo sees `/usr/bin/env`, which it uses to pass
-`PATH` and `HOME` through, so the rule would have to allow `env` anyway.
+Confirm with `sudo -n true` as that user (it must print nothing and exit 0).
 
-**Run the whole runner as root (Linux).** GitHub's `config.sh` refuses to run as root unless you opt in:
+Other details:
+- The default `use_sudo: auto` picks this up; set `use_sudo: true` in the runner's workflow file if you want the job to fail rather than continue without root.
+- The rule grants full root to that account, so prefer a dedicated user or a dedicated machine.
+- Narrowing it to one command is not useful as the action is written; `sudo` sees `/usr/bin/env`, which it uses to pass `PATH` and `HOME` through, so the rule would have to allow `env` anyway.
 
-```
-sudo env RUNNER_ALLOW_RUNASROOT=1 ./config.sh --url ... --token ...
-sudo ./svc.sh install root
-sudo ./svc.sh start
-```
+### 3. Set up the machine with the Set up runner workflow
 
-Every step of every job then runs as root, including the upload step that holds the token. Install conda for
-root (or point `conda_root` at an installation root can read) and set `use_sudo: false` so the action does not
-wrap the command a second time; state lives under `/root/.nwb_benchmarks`. On macOS `svc.sh` installs a
-per-user LaunchAgent, so a root runner is not supported by the installer; use passwordless sudo there.
+Run **Actions → Set up runner → Run workflow** with the runner's label.
+It installs whatever the machine lacks of Miniforge, git, a C and C++ compiler (Linux), and `tshark`.
+Everything goes under `<runner>/_work/_nwb_benchmarks`, except `tshark` on Linux, which comes from the distribution's package manager through the `sudo` from step 2.
+It reports what it found, `sudo`, the default network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works; and ends with any lines to add to the runner's workflow file.
+Re-run it any time to repair a machine; it only installs what is missing.
 
-**No root at all (Linux only).** Give the capture helper the capabilities it needs and let the runner's user
-use it. The **Set up runner** workflow does this when run with `capture_without_root` ticked while the
-runner's user still has passwordless sudo (grant it, run the workflow, then remove the sudoers line if you
-want); by hand it is:
+### 4. Create the upload token
 
-```
-sudo setcap cap_net_raw,cap_net_admin+eip "$(command -v dumpcap)"
-sudo usermod -aG wireshark <user>      # Debian/Ubuntu: `sudo dpkg-reconfigure wireshark-common`, answer Yes
-```
+Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with:
 
-Log the user out and in again (or restart the runner service) for the group to apply, and set
-`use_sudo: false`. On Linux `psutil.net_connections()` works without root for the processes the user can
-inspect, which includes the benchmark process itself. On macOS, Wireshark's ChmodBPF and the `access_bpf` group cover packet capture but
-`psutil.net_connections()` still needs root, so this option does not apply there.
+- **Repository access**: only the results repository, `NeurodataWithoutBorders/nwb-benchmarks-results`. The token's owner needs write access to it, because results are committed straight to its default branch (`dev`).
+- **Permissions**: *Contents: Read and write*. Nothing else.
 
-**Skip the network tracking benchmarks.** Set `use_sudo: false` without any of the above. The timing
-benchmarks run normally; the network tracking benchmarks are skipped when tshark is missing and fail when it
-is present but cannot capture.
+A classic token with the `public_repo` scope also works, but is not recommended for security reasons.
 
-## Configuration reference
+### 5. Store the token as a repository secret
 
-### Secret (one repository secret per runner)
+A repository administrator adds the token under **Settings → Secrets and variables → Actions → New repository secret**, named `RESULTS_UPLOAD_TOKEN_<LABEL>`.
+The runner label in uppercase with dashes turned into underscores (`lbl_laptop` → `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`).
 
-| Secret | Purpose |
-| --- | --- |
-| `RESULTS_UPLOAD_TOKEN_<LABEL>` | Token with write access to `results_repository`. The runner's workflow file passes it as `RESULTS_UPLOAD_TOKEN`; it reaches git as a per-command HTTP header, is never written to disk on the runner, and is masked in logs. |
+### 6. Add the per-runner workflow
+
+Copy `templates/runner-workflow.yml` to `.github/workflows/runner-<label>.yml` and:
+
+- replace every `RUNNER_LABEL` with your label and `RUNNER_SECRET_NAME` with the secret name from step 5.
+- choose a cron schedule (UTC).
+
+Open a pull request to `dev`.
 
 ### Workflow inputs
 
-Set these under `with:` in `runner-<label>.yml`.
-
-The composite action takes the same inputs with dashes instead of underscores (`conda-root`, `use-sudo`, ...),
-plus `runner-label` and `results-upload-token`; `timeout_minutes` is job-level and exists only on the workflow.
+If needed, set these under `with:` in `runner-<label>.yml`.
 
 | Input | Default | Purpose |
 | --- | --- | --- |
@@ -281,69 +136,56 @@ plus `runner-label` and `results-upload-token`; `timeout_minutes` is job-level a
 | `conda_root` | the Miniforge under `_work` | Explicit conda installation to use instead (the directory containing `etc/profile.d/conda.sh`). A conda on `PATH` is never used. |
 | `conda_env_name` | `nwb_benchmarks_runner` | Name of the conda environment created at the start and removed at the end of every job. |
 | `network_interface` | interface of the default route | Interface for network tracking (`en0`, `eth0`, `Ethernet`, ...). Set it if auto-detection picks the wrong one or fails. |
-| `tshark_path` | auto-detected | Absolute path of the tshark executable. Searched: the Wireshark copy under `_work`, `PATH`, common locations. Required on Windows. |
-| `use_sudo` | `auto` | `auto` uses sudo when it works without a password; `true` requires it (job fails otherwise); `false` never uses it. |
+| `tshark_path` | auto-detected | Absolute path of the `tshark` executable. Searched: the Wireshark copy under `_work`, `PATH`, common locations. Required on Windows. |
+| `use_sudo` | `auto` | `auto` uses `sudo` when it works without a password; `true` requires it (job fails otherwise); `false` never uses it. |
 | `cache_directory` | under `_work` | Passed to `nwb_benchmarks config_set_cache`; the suite downloads whole NWB files, so point it at a large disk if `_work` is on a small one. |
 | `keep_conda_env` | `false` | Keep the conda environment after the job for inspection. |
 | `results_repository` | `NeurodataWithoutBorders/nwb-benchmarks-results` | Repository the results are committed to; the token needs write access to it. |
 | `results_branch` | the repository's default branch | Branch the results are committed to. |
 
-The manual trigger form of each per-runner workflow exposes `benchmark_pattern`, `nwb_benchmarks_ref`, `debug`,
-and `upload`; scheduled runs use the full suite, `main`, no debug, and upload.
+The manual trigger form of each per-runner workflow exposes `benchmark_pattern`, `nwb_benchmarks_ref`, `debug`, and `upload`; scheduled runs use the full suite, `main`, no debug, and upload.
 
-## Files on the runner machine
+## Other setups (optional)
 
-Everything lives under `<runner>/_work/_nwb_benchmarks/` (a sibling of the runner's own `_temp` and `_tool`
-folders); the runner user's real home directory is never written to.
+### Without passwordless `sudo`
 
-| Path under `_work/_nwb_benchmarks/` | Notes |
-| --- | --- |
-| `home/` | `HOME` for every job step. Holds `.nwb_benchmarks/{results,machines,environments,logs}` written by the suite, `.nwb_benchmarks/runner/pending/` (files waiting for upload; non-empty after a failed upload, the next run uploads them) and `.nwb_benchmarks/runner/uploaded/` (archive, safe to delete), the download cache `.cache/nwb_benchmarks/`, `.asv-machine.json`, and conda's `.conda/`. |
-| `miniforge3/` | conda, installed by the Set up runner workflow; the only conda the jobs use unless `conda_root` says otherwise. Benchmark environments are created inside it and removed at the end of every job unless `keep_conda_env: true`. |
-| `tools/Wireshark.app/` | macOS only: Wireshark copied by the Set up runner workflow; its `tshark` is used automatically. |
+Only the network tracking benchmarks need root; the timing benchmarks run either way.
+When the runner's user cannot have passwordless `sudo`, pick one of these.
+The **Set up runner** summary then prints the exact commands that still need a person at the machine.
 
-The clone of `nwb-benchmarks` lives in the job workspace (`_work/nwb-benchmarks-runner/.../nwb-benchmarks`) and is
-removed at the end of every job. Result files stay owned by the runner's user even after a sudo run; the workflow
-restores ownership of the whole state directory itself.
+**Run the whole runner as root (Linux).** GitHub's `config.sh` refuses to run as root unless you opt in:
 
-## Operational notes
+```
+sudo env RUNNER_ALLOW_RUNASROOT=1 ./config.sh --url ... --token ...
+sudo ./svc.sh install root
+sudo ./svc.sh start
+```
 
-- Cron schedules are in UTC and only run from the default branch (`dev`). GitHub disables scheduled workflows
-  after 60 days without commits to the repository; any commit re-enables them.
-- A runner never executes two benchmark jobs at once; a second trigger for the same label waits for the first to
-  finish. Put different machines on different hours if they share a network connection.
-- Jobs time out after 12 hours by default (`timeout_minutes`).
-- The job fails when `nwb_benchmarks run` produces no results file. A non-zero exit *after* results were written
-  is tolerated and reported as a warning: versions of `nwb-benchmarks` from before
-  [NeurodataWithoutBorders/nwb-benchmarks#198](https://github.com/NeurodataWithoutBorders/nwb-benchmarks/pull/198)
-  still try to POST to the retired server and fail at that final step, and the workflow uploads the files itself.
-- Every job stores its console log and the new result files as a workflow artifact for 30 days, so results of a
-  failed upload can also be recovered from the Actions UI.
-- Machine names in the results stay anonymous: `nwb_benchmarks` records `github-<timestamp>` whenever it runs
-  under GitHub Actions, while the stable machine id is a hash of the hardware description.
+Every step of every job then runs as root, including the upload step that holds the token.
 
-## Security
+Other details:
+- Set `use_sudo: false` so the action does not wrap the command a second time; the Set up runner workflow, run on that runner, installs everything under `_work` as before.
+- On macOS `svc.sh` installs a per-user LaunchAgent, so a root runner is not supported by the installer; use passwordless `sudo` there.
 
-- Self-hosted runners on a public repository: only `schedule` and `workflow_dispatch` trigger jobs on them, and
-  `workflow_dispatch` is limited to people with write access. Never add `pull_request` or `push` triggers to a
-  workflow that uses `self-hosted`. The lint workflow runs on GitHub-hosted runners only.
-- Passwordless sudo (or a root runner) gives the benchmark suite root on the machine. Use a dedicated user or
-  machine, and keep the suite pinned to `main` of the upstream repository (the default) unless you are testing
-  your own branch.
-- Tokens are scoped to a single repository and stored only as repository secrets, one per runner. Each
-  per-runner workflow passes its own secret explicitly (no `secrets: inherit`), so a machine never receives
-  another runner's token. Rotate a token by replacing the secret; nothing on the machine has to change.
+**Capture without root (Linux).** Give the capture helper the capabilities it needs and let the runner's user use it.
+The **Set up runner** workflow does this when run with `capture_without_root` ticked while the runner's user still has passwordless `sudo`: grant it as in step 2 for that one run, then remove the `sudoers` line.
 
-## Troubleshooting
+By hand it is:
 
-| Symptom | What to do |
-| --- | --- |
-| Job stays "Waiting for a runner to pick up this job" | The runner is offline or its label differs from the workflow's `runner` value. Check **Settings → Actions → Runners** and `./svc.sh status` on the machine. |
-| `No conda installation under .../_work/_nwb_benchmarks/miniforge3` | Run the **Set up runner** workflow for this runner, or set the `conda_root` input to use an installation elsewhere. |
-| `No upload token was passed` / `RESULTS_UPLOAD_TOKEN is empty` | The repository secret named in the workflow file's `secrets:` block does not exist (check the spelling: uppercase, underscores), or the workflow file does not pass it. |
-| Push rejected with 403 / authentication failed | The token expired or its owner lacks write access to `results_repository`. Replace the secret. |
-| Network tracking benchmarks skipped or failing | Install tshark or set `tshark_path`; set `network_interface`; grant passwordless sudo (macOS/Linux). |
-| `Passwordless sudo is not available` warning | Pick one of the options under "Root and sudo", or set `use_sudo: false` to accept skipping the network tracking benchmarks. |
-| `Permission denied` under `_work/_nwb_benchmarks` | Leftovers from an interrupted sudo run: `sudo chown -R "$(id -un)" <runner>/_work/_nwb_benchmarks`. |
-| `No such file or directory: 'gcc'` / `Failed to build numcodecs` during `conda env create` | A package in the upstream environment file has no prebuilt wheel for the Python version it pins, so pip compiles it and the machine has no C compiler. Install one (Debian/Ubuntu `sudo apt-get install build-essential`, macOS `xcode-select --install`) or fix the pins in `environments/nwb_benchmarks.yaml` upstream; the **Set up runner** summary shows whether a compiler was found. |
-| `conda env create` fails | Check free disk space and `conda clean --all`; the environment file pins Python and uses `pip` for most packages, so network access to PyPI is required. |
+```
+sudo setcap cap_net_raw,cap_net_admin+eip "$(command -v dumpcap)"
+sudo usermod -aG wireshark <user>      # Debian/Ubuntu: `sudo dpkg-reconfigure wireshark-common`, answer Yes
+```
+
+Log the user out and in again (or restart the runner service) for the group to apply, and set `use_sudo: false`.
+On Linux `psutil.net_connections()` works without root for the processes the user can inspect, which includes the benchmark process itself.
+On macOS, Wireshark's ChmodBPF and the `access_bpf` group cover packet capture but `psutil.net_connections()` still needs root, so this option does not apply there.
+
+**Skip the network tracking benchmarks.** Set `use_sudo: false` without any of the above.
+The timing benchmarks run normally; the network tracking benchmarks are skipped when `tshark` is missing and fail when it is present but cannot capture.
+
+### Native Windows
+
+Native Windows is best effort.
+It needs Git for Windows, whose `bash` the jobs run in, and a Miniforge installed by hand under `<runner>\_work\_nwb_benchmarks\miniforge3` (or named with `conda_root`), since the **Set up runner** workflow cannot install one there.
+`tshark` and the network tracking benchmarks cannot be enabled in this case.

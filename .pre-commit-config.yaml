@@ -1,0 +1,42 @@
+# Formatting and hygiene checks, after NeurodataWithoutBorders/nwb-benchmarks-paper.
+# Run locally with `pre-commit run --all-files`; the pre-commit workflow runs the same hooks
+# on every pull request. md-lines rewrites Markdown so that each sentence sits on its own line
+# (list items excepted) and fails once so the changes can be reviewed.
+default_install_hook_types:
+  - pre-commit
+
+default_language_version:
+  python: python3.13
+
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v6.0.0
+  hooks:
+    - id: check-yaml
+    - id: end-of-file-fixer
+    - id: trailing-whitespace
+      args: ["--markdown-linebreak-ext=md"]
+    - id: check-json
+    - id: check-toml
+    - id: check-added-large-files
+      args: ["--maxkb=1024"]
+    - id: check-case-conflict
+    - id: check-merge-conflict
+    - id: mixed-line-ending
+
+- repo: https://github.com/python-jsonschema/check-jsonschema
+  rev: 0.37.4
+  hooks:
+    - id: check-dependabot
+    - id: check-github-workflows
+      args: ["--verbose"]
+
+- repo: https://github.com/codespell-project/codespell
+  rev: v2.4.2
+  hooks:
+  - id: codespell
+
+- repo: https://github.com/CodyCBakerPhD/md-lines-pre-commit
+  rev: v0.1.0
+  hooks:
+  - id: md-lines
