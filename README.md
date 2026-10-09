@@ -162,11 +162,14 @@ sudo ./svc.sh start
 ```
 
 Every step of every job then runs as root, including the upload step that holds the token.
-Set `use_sudo: false` so the action does not wrap the command a second time; the Set up runner workflow, run on that runner, installs everything under `_work` as before.
-On macOS `svc.sh` installs a per-user LaunchAgent, so a root runner is not supported by the installer; use passwordless `sudo` there.
+
+Other details:
+- Set `use_sudo: false` so the action does not wrap the command a second time; the Set up runner workflow, run on that runner, installs everything under `_work` as before.
+- On macOS `svc.sh` installs a per-user LaunchAgent, so a root runner is not supported by the installer; use passwordless `sudo` there.
 
 **Capture without root (Linux).** Give the capture helper the capabilities it needs and let the runner's user use it.
-The **Set up runner** workflow does this when run with `capture_without_root` ticked while the runner's user still has passwordless `sudo`: grant it as in step 2 for that one run, then remove the sudoers line.
+The **Set up runner** workflow does this when run with `capture_without_root` ticked while the runner's user still has passwordless `sudo`: grant it as in step 2 for that one run, then remove the `sudoers` line.
+
 By hand it is:
 
 ```
@@ -185,4 +188,4 @@ The timing benchmarks run normally; the network tracking benchmarks are skipped 
 
 Native Windows is best effort.
 It needs Git for Windows, whose `bash` the jobs run in, and a Miniforge installed by hand under `<runner>\_work\_nwb_benchmarks\miniforge3` (or named with `conda_root`), since the **Set up runner** workflow cannot install one there.
-The network tracking benchmarks do not run.
+`tshark` and the network tracking benchmarks cannot be enabled in this case.
