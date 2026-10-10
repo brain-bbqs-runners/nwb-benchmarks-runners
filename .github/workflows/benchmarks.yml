@@ -47,10 +47,10 @@ on:
         type: boolean
         default: true
       timeout_minutes:
-        description: Maximum duration of the job in minutes.
+        description: Maximum duration of the job in minutes. The default is the 5-day maximum GitHub allows for jobs on self-hosted runners.
         required: false
         type: number
-        default: 720
+        default: 7200
 
       # --- Machine configuration (all optional) -----------------------------------------
       conda_root:
