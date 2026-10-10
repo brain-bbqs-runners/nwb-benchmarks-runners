@@ -132,7 +132,7 @@ If needed, set these under `with:` in `runner-<label>.yml`.
 | `benchmark_pattern` | empty (full suite) | `--bench` pattern selecting a subset of the suite. |
 | `debug` | `false` | `--debug`: one repeat, verbose output, nothing staged or uploaded. |
 | `upload` | `true` | Set to `false` to run without uploading. |
-| `timeout_minutes` | `720` | Job timeout. |
+| `timeout_minutes` | `7200` | Job timeout; the default is the 5-day maximum for self-hosted runners. |
 | `conda_root` | the Miniforge under `_work` | Explicit conda installation to use instead (the directory containing `etc/profile.d/conda.sh`). A conda on `PATH` is never used. |
 | `conda_env_name` | `nwb_benchmarks_runner` | Name of the conda environment created at the start and removed at the end of every job. |
 | `network_interface` | interface of the default route | Interface for network tracking (`en0`, `eth0`, `Ethernet`, ...). Set it if auto-detection picks the wrong one or fails. |
