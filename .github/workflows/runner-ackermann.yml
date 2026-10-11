@@ -9,7 +9,8 @@ name: Benchmarks (ackermann)
 
 on:
   schedule:
-    - cron: "17 16 * * *"
+    # Every hour; each run measures one benchmark chosen at random. Staggered from lbl-mac.
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       benchmark_pattern:

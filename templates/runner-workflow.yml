@@ -6,8 +6,9 @@
 # 3. Replace RUNNER_SECRET_NAME with the name of the repository secret that holds this
 #    runner's upload token. Convention: RESULTS_UPLOAD_TOKEN_ followed by the label in
 #    uppercase with dashes turned into underscores (e.g. RESULTS_UPLOAD_TOKEN_LBL_LAPTOP).
-# 4. Pick a cron schedule (UTC). Consider a different hour than the other runners if
-#    several machines share a network.
+# 4. Pick a cron schedule (UTC). The runners run hourly, each run measuring one benchmark
+#    chosen at random; pick a different minute than the other runners if several machines
+#    share a network.
 # 5. Uncomment and fill in the machine configuration your machine needs (often nothing).
 # 6. Optionally pin a `benchmark_pattern` to make this a "situation" workflow that runs a
 #    subset of the suite (e.g. only `time_remote_slicing`, or `.` for all of it) instead of one
@@ -19,8 +20,9 @@ name: Benchmarks (RUNNER_LABEL)
 
 on:
   schedule:
-    # Cron times are UTC.
-    - cron: "17 7 * * *"
+    # Every hour; each run measures one benchmark chosen at random. Pick a different minute
+    # than the other runners if several machines share a network.
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       benchmark_pattern:

@@ -9,8 +9,8 @@ name: Benchmarks (lbl-mac)
 
 on:
   schedule:
-    # Cron times are UTC. 07:17 UTC is ~midnight on the US West Coast.
-    - cron: "17 7 * * *"
+    # Every hour; each run measures one benchmark chosen at random. Staggered from ackermann.
+    - cron: "47 * * * *"
   workflow_dispatch:
     inputs:
       benchmark_pattern:
