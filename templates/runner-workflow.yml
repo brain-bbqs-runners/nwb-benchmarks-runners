@@ -10,7 +10,8 @@
 #    several machines share a network.
 # 5. Uncomment and fill in the machine configuration your machine needs (often nothing).
 # 6. Optionally pin a `benchmark_pattern` to make this a "situation" workflow that runs a
-#    subset of the suite (e.g. only `time_remote_slicing`).
+#    subset of the suite (e.g. only `time_remote_slicing`, or `.` for all of it) instead of one
+#    benchmark chosen at random.
 #
 # Everything else is handled by .github/workflows/benchmarks.yml. See README.md for the
 # full list of inputs.
@@ -23,7 +24,7 @@ on:
   workflow_dispatch:
     inputs:
       benchmark_pattern:
-        description: Optional `--bench` pattern; leave empty for the full suite
+        description: Optional `--bench` pattern; leave empty for one benchmark chosen at random
         required: false
         type: string
         default: ""

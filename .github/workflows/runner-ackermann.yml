@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       benchmark_pattern:
-        description: Optional `--bench` pattern; leave empty for the full suite
+        description: Optional `--bench` pattern; leave empty for one benchmark chosen at random
         required: false
         type: string
         default: ""

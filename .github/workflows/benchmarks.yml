@@ -32,7 +32,7 @@ on:
         type: string
         default: main
       benchmark_pattern:
-        description: Optional `--bench` pattern selecting a subset of the suite. Empty runs everything.
+        description: Optional `--bench` pattern selecting a subset of the suite. Empty runs one benchmark chosen at random (`nwb_benchmarks run --random`).
         required: false
         type: string
         default: ""
