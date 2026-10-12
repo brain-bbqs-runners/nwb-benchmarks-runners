@@ -46,6 +46,16 @@ on:
         required: false
         type: boolean
         default: true
+      run_download_benchmarks:
+        description: Include the download benchmarks (whole NWB files through the DANDI API), which the suite leaves out by default; they are long and need bandwidth and disk space.
+        required: false
+        type: boolean
+        default: false
+      run_incremental_slicing_benchmarks:
+        description: Include the incremental slicing benchmarks, which the suite leaves out by default. `true` for all of them, or a comma-separated list of modalities (`ecephys`, `ophys`, `icephys`). Empty leaves them out.
+        required: false
+        type: string
+        default: ""
       timeout_minutes:
         description: Maximum duration of the job in minutes. The default is the 5-day maximum GitHub allows for jobs on self-hosted runners.
         required: false
@@ -139,6 +149,8 @@ jobs:
           benchmark-pattern: ${{ inputs.benchmark_pattern }}
           debug: ${{ inputs.debug }}
           upload: ${{ inputs.upload }}
+          run-download-benchmarks: ${{ inputs.run_download_benchmarks }}
+          run-incremental-slicing-benchmarks: ${{ inputs.run_incremental_slicing_benchmarks }}
           conda-root: ${{ inputs.conda_root }}
           conda-env-name: ${{ inputs.conda_env_name }}
           network-interface: ${{ inputs.network_interface }}

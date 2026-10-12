@@ -62,6 +62,10 @@ jobs:
       # use_sudo: auto                                    # auto | true | false
       # cache_directory: /data/nwb_benchmarks_cache       # large downloads live here
 
+      # --- Opt-in parts of the suite (left out when omitted) ------------------------------
+      # run_download_benchmarks: true                     # whole-file downloads; long, needs disk
+      # run_incremental_slicing_benchmarks: "true"        # or a modality list: icephys,ophys
+
       # --- Upload configuration (defaults to the central results repository) ------------
       # results_repository: <owner>/nwb-benchmarks-results   # e.g. a test repository
       # results_branch: dev                                # default branch when omitted
