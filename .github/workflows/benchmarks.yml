@@ -52,7 +52,7 @@ on:
         type: boolean
         default: false
       run_incremental_slicing_benchmarks:
-        description: Include the incremental slicing benchmarks, which the suite leaves out by default. `true` for all of them, or a comma-separated list of modalities (`ecephys`, `ophys`, `icephys`). Empty leaves them out.
+        description: Include the incremental slicing benchmarks, which the suite leaves out by default. `all` for all of them, or a comma-separated list of modalities (`ecephys`, `ophys`, `icephys`). Empty leaves them out.
         required: false
         type: string
         default: ""

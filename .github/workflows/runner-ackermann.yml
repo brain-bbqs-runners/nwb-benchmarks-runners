@@ -51,7 +51,7 @@ jobs:
       keep_conda_env: true
       # Every opt-in part of the suite is in the pool the random pick chooses from.
       run_download_benchmarks: true
-      run_incremental_slicing_benchmarks: "true"
+      run_incremental_slicing_benchmarks: all
       # Run options, forwarded from the manual trigger form. Scheduled runs never use debug
       # mode and always upload.
       benchmark_pattern: ${{ inputs.benchmark_pattern || '' }}

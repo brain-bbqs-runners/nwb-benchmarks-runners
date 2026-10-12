@@ -16,7 +16,7 @@
 #   BENCHMARK_PATTERN                   optional `--bench` pattern; empty runs one benchmark at random
 #   DEBUG_MODE                          "true" passes `--debug`; nothing is staged for upload
 #   RUN_DOWNLOAD_BENCHMARKS_INPUT       "true" includes the suite's opt-in download benchmarks
-#   RUN_INCREMENTAL_SLICING_BENCHMARKS_INPUT  "true" or a modality list includes the suite's opt-in
+#   RUN_INCREMENTAL_SLICING_BENCHMARKS_INPUT  "all" or a modality list includes the suite's opt-in
 #                                       incremental slicing benchmarks; empty leaves them out
 #   NWB_BENCHMARKS_USE_SUDO             auto (default) | true | false
 #   NWB_BENCHMARKS_NETWORK_INTERFACE    interface to monitor; auto-detected on macOS/Linux when empty
