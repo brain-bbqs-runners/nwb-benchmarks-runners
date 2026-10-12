@@ -6,8 +6,9 @@
 # against the current versions of their dependencies, and the environment id stored with
 # each result is derived from the installed packages. With NWB_BENCHMARKS_KEEP_CONDA_ENV
 # the environment survives between runs (cleanup.sh leaves it in place) and an existing one
-# is updated from the environment file instead of being rebuilt, which is much faster;
-# packages the file does not pin then only change when the file does.
+# is updated from the environment file instead of being rebuilt, which is much faster.
+# Packages the file does not pin then only change when the file does, so a kept environment
+# is rebuilt from scratch once it is 30 days old.
 #
 # Inputs (environment variables):
 #   NWB_BENCHMARKS_CLONE_DIR       path to the nwb-benchmarks checkout (required)
@@ -40,7 +41,23 @@ load_conda "$CONDA_ROOT"
 export CONDA_ALWAYS_YES=true
 conda --version
 
+# A kept environment is rebuilt once a month so that packages the environment file does not
+# pin still follow their releases. The marker is written when the environment is created.
+REBUILD_AFTER_DAYS=30
+CREATED_MARKER="$CONDA_ROOT/envs/$ENV_NAME/.nwb_benchmarks_runner_created"
+
+reuse_existing_env=false
 if [ "$KEEP_CONDA_ENV" = true ] && list_conda_env_names | grep -qx -- "$ENV_NAME"; then
+  if [ ! -f "$CREATED_MARKER" ]; then
+    log "The existing '$ENV_NAME' environment has no creation marker; rebuilding it"
+  elif [ -n "$(find "$CREATED_MARKER" -mtime +"$REBUILD_AFTER_DAYS" 2> /dev/null)" ]; then
+    log "The existing '$ENV_NAME' environment is more than $REBUILD_AFTER_DAYS days old; rebuilding it"
+  else
+    reuse_existing_env=true
+  fi
+fi
+
+if [ "$reuse_existing_env" = true ]; then
   # The pip section of the file installs the checkout itself (`-e ..`), so the update also
   # picks up the nwb-benchmarks ref cloned for this run.
   group_start "Update the existing conda environment '$ENV_NAME' from $ENVIRONMENT_FILE"
@@ -53,6 +70,7 @@ else
     conda env remove --name "$ENV_NAME"
   fi
   conda env create --file "$ENVIRONMENT_FILE" --name "$ENV_NAME" --no-default-packages
+  touch "$CREATED_MARKER" 2> /dev/null || warn "Could not write $CREATED_MARKER; the environment will be rebuilt on the next run"
   group_end
 fi
 

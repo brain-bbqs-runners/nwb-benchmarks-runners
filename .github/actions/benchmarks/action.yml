@@ -74,7 +74,7 @@ inputs:
     required: false
     default: ""
   keep-conda-env:
-    description: '"true" keeps the conda environment between runs: it is not removed at the end, and the next run updates it from the environment file instead of rebuilding it.'
+    description: '"true" keeps the conda environment between runs: it is not removed at the end, and the next run updates it from the environment file instead of rebuilding it. A kept environment is rebuilt once it is 30 days old.'
     required: false
     default: "false"
 

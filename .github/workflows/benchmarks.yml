@@ -84,7 +84,7 @@ on:
         type: string
         default: ""
       keep_conda_env:
-        description: Keep the conda environment between jobs; the next job updates it from the environment file instead of rebuilding it.
+        description: Keep the conda environment between jobs; the next job updates it from the environment file instead of rebuilding it. A kept environment is rebuilt once it is 30 days old.
         required: false
         type: boolean
         default: false

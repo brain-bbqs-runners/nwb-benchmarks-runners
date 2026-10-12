@@ -139,7 +139,7 @@ If needed, set these under `with:` in `runner-<label>.yml`.
 | `tshark_path` | auto-detected | Absolute path of the `tshark` executable. Searched: the Wireshark copy under `_work`, `PATH`, common locations. Required on Windows. |
 | `use_sudo` | `auto` | `auto` uses `sudo` when it works without a password; `true` requires it (job fails otherwise); `false` never uses it. |
 | `cache_directory` | under `_work` | Passed to `nwb_benchmarks config_set_cache`; the suite downloads whole NWB files, so point it at a large disk if `_work` is on a small one. |
-| `keep_conda_env` | `false` | Keep the conda environment between jobs. The next job updates it from the environment file instead of rebuilding it, which saves several minutes per run; packages the file does not pin then only change when the file does. |
+| `keep_conda_env` | `false` | Keep the conda environment between jobs. The next job updates it from the environment file instead of rebuilding it, which saves several minutes per run; packages the file does not pin then only change when the file does, so a kept environment is rebuilt from scratch once it is 30 days old. |
 | `results_repository` | `NeurodataWithoutBorders/nwb-benchmarks-results` | Repository the results are committed to; the token needs write access to it. |
 | `results_branch` | the repository's default branch | Branch the results are committed to. |
 
