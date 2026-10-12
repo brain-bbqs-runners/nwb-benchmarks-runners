@@ -55,6 +55,7 @@ The inputs of the action are the workflow inputs with dashes instead of undersco
 - A scheduled run measures one benchmark chosen at random (`nwb_benchmarks run --random`), about a hundred are eligible, and the runners run hourly, so each benchmark is sampled about every four days on average. The chosen benchmark is in the job summary and in the console log.
 - The job fails when `nwb_benchmarks run` produces no results file. A non-zero exit *after* results were written is tolerated and reported as a warning: versions of `nwb-benchmarks` from before [NeurodataWithoutBorders/nwb-benchmarks#198](https://github.com/NeurodataWithoutBorders/nwb-benchmarks/pull/198) still try to POST to the retired server and fail at that final step, and the workflow uploads the files itself.
 - Every job stores its console log and the new result files as a workflow artifact for 30 days, so results of a failed upload can also be recovered from the Actions UI.
+- The upload never replaces a result or environment file the repository already has, so a retry cannot duplicate or alter results. A machine file is the exception: its id leaves the machine's name out, so when its content changes (for example the name after a rename) the upload replaces the repository's copy under the same id.
 - Machine names in the results stay anonymous: `nwb_benchmarks` records `github-<timestamp>` whenever it runs under GitHub Actions, while the stable machine id is a hash of the hardware description.
 
 ## Troubleshooting

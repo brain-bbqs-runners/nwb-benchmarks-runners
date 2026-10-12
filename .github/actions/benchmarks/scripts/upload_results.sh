@@ -5,9 +5,11 @@
 # upload server did. The token therefore needs write access to that repository. Concurrent
 # uploads from other runners are handled by re-syncing and retrying the push.
 #
-# Files already present in the repository (same file name) are skipped, so re-running after
-# a partial failure never duplicates results. Uploaded files are moved from the pending to
-# the uploaded directory.
+# Result and environment files already present in the repository (same file name) are
+# skipped, so re-running after a partial failure never duplicates results. A machine file
+# keeps its name when its content changes (the machine id leaves the machine's name out), so
+# a machine file whose content differs from the repository's copy replaces it. Uploaded files
+# are moved from the pending to the uploaded directory.
 #
 # Inputs (environment variables):
 #   RESULTS_UPLOAD_TOKEN         token with write access to RESULTS_REPOSITORY (required)
@@ -82,27 +84,33 @@ subdir_for() {
   esac
 }
 
-# Copies the pending files that are not yet in the clone and stages them.
-# Sets ADDED_COUNT, SKIPPED_COUNT, and ADDED_LIST (markdown bullet list).
+# Copies the pending files that are not yet in the clone, and the machine files whose content
+# changed, and stages them. Sets ADDED_COUNT (files added or replaced), SKIPPED_COUNT, and
+# ADDED_LIST (markdown bullet list).
 stage_pending() {
   ADDED_COUNT=0
   SKIPPED_COUNT=0
   ADDED_LIST=""
   mkdir -p "$WORKDIR/results" "$WORKDIR/machines" "$WORKDIR/environments"
-  local file name subdir
+  local file name subdir note
   for file in "${PENDING[@]}"; do
     name="$(basename "$file")"
     if ! subdir="$(subdir_for "$name")"; then
       warn "Skipping unrecognized file $name"
       continue
     fi
+    note=""
     if [ -e "$WORKDIR/$subdir/$name" ]; then
-      SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
-      continue
+      if [ "$subdir" = machines ] && ! cmp -s "$file" "$WORKDIR/$subdir/$name"; then
+        note=" (updated)"
+      else
+        SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+        continue
+      fi
     fi
     cp "$file" "$WORKDIR/$subdir/$name"
     ADDED_COUNT=$((ADDED_COUNT + 1))
-    ADDED_LIST="${ADDED_LIST}- ${subdir}/${name}"$'\n'
+    ADDED_LIST="${ADDED_LIST}- ${subdir}/${name}${note}"$'\n'
   done
   git -C "$WORKDIR" add -A -- results machines environments
 }
