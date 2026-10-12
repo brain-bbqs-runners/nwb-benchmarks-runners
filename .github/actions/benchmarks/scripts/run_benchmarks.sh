@@ -15,6 +15,9 @@
 #   CONDA_ROOT, NWB_BENCHMARKS_CONDA_ENV  written by setup_environment.sh (required)
 #   BENCHMARK_PATTERN                   optional `--bench` pattern; empty runs one benchmark at random
 #   DEBUG_MODE                          "true" passes `--debug`; nothing is staged for upload
+#   RUN_DOWNLOAD_BENCHMARKS_INPUT       "true" includes the suite's opt-in download benchmarks
+#   RUN_INCREMENTAL_SLICING_BENCHMARKS_INPUT  "all" or a modality list includes the suite's opt-in
+#                                       incremental slicing benchmarks; empty leaves them out
 #   NWB_BENCHMARKS_USE_SUDO             auto (default) | true | false
 #   NWB_BENCHMARKS_NETWORK_INTERFACE    interface to monitor; auto-detected on macOS/Linux when empty
 #   TSHARK_PATH                         explicit path to tshark; auto-detected when empty
@@ -75,6 +78,25 @@ if [ -z "${NWB_BENCHMARKS_NETWORK_INTERFACE:-}" ]; then
   fi
 else
   log "Network interface: $NWB_BENCHMARKS_NETWORK_INTERFACE"
+fi
+
+# --- Opt-in benchmarks --------------------------------------------------------------
+# The suite leaves its download and incremental slicing benchmarks out unless these variables
+# are set, both for a full run and for the pool `--random` chooses from. They are only
+# exported when requested, because the suite treats an empty RUN_DOWNLOAD_BENCHMARKS as set.
+if [ "$(normalize_bool "${RUN_DOWNLOAD_BENCHMARKS_INPUT:-}" false)" = true ]; then
+  export RUN_DOWNLOAD_BENCHMARKS=true
+  log "Download benchmarks: included"
+else
+  unset RUN_DOWNLOAD_BENCHMARKS
+  log "Download benchmarks: left out"
+fi
+if [ -n "${RUN_INCREMENTAL_SLICING_BENCHMARKS_INPUT:-}" ]; then
+  export RUN_INCREMENTAL_SLICING_BENCHMARKS="$RUN_INCREMENTAL_SLICING_BENCHMARKS_INPUT"
+  log "Incremental slicing benchmarks: $RUN_INCREMENTAL_SLICING_BENCHMARKS"
+else
+  unset RUN_INCREMENTAL_SLICING_BENCHMARKS
+  log "Incremental slicing benchmarks: left out"
 fi
 
 # --- Cache directory ----------------------------------------------------------------
@@ -207,6 +229,12 @@ log "$count result file(s) staged in $PENDING_DIR"
     echo "- benchmark (chosen at random): \`${selected_benchmark:-unknown}\`"
   fi
   echo "- new result files: $count"
+  if [ -n "${RUN_DOWNLOAD_BENCHMARKS:-}" ]; then
+    echo "- download benchmarks: included"
+  else
+    echo "- download benchmarks: left out"
+  fi
+  echo "- incremental slicing benchmarks: ${RUN_INCREMENTAL_SLICING_BENCHMARKS:-left out}"
   echo "- ran with sudo: $USE_SUDO"
   echo "- nwb_benchmarks exit status: $status"
 } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"

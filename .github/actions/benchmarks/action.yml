@@ -47,6 +47,14 @@ inputs:
     description: '"false" skips the upload.'
     required: false
     default: "true"
+  run-download-benchmarks:
+    description: '"true" includes the download benchmarks (whole NWB files through the DANDI API), which the suite leaves out by default; they are long and need bandwidth and disk space.'
+    required: false
+    default: "false"
+  run-incremental-slicing-benchmarks:
+    description: Includes the incremental slicing benchmarks, which the suite leaves out by default. "all" for all of them, or a comma-separated list of modalities (ecephys, ophys, icephys). Empty leaves them out.
+    required: false
+    default: ""
 
   # --- Machine configuration (all optional) -------------------------------------------
   conda-root:
@@ -177,6 +185,8 @@ runs:
       env:
         BENCHMARK_PATTERN: ${{ inputs.benchmark-pattern }}
         DEBUG_MODE: ${{ inputs.debug }}
+        RUN_DOWNLOAD_BENCHMARKS_INPUT: ${{ inputs.run-download-benchmarks }}
+        RUN_INCREMENTAL_SLICING_BENCHMARKS_INPUT: ${{ inputs.run-incremental-slicing-benchmarks }}
         # Both paths are picked up by the artifact step below.
         RUNNER_LOG_FILE: ${{ runner.temp }}/nwb-benchmarks-run.log
         RUNNER_ARTIFACT_DIR: ${{ runner.temp }}/nwb-benchmarks-artifact

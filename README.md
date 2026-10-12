@@ -132,6 +132,8 @@ If needed, set these under `with:` in `runner-<label>.yml`.
 | `benchmark_pattern` | empty (one benchmark at random) | `--bench` pattern selecting a subset of the suite instead; `.` selects all of it. |
 | `debug` | `false` | `--debug`: one repeat, verbose output, nothing staged or uploaded. |
 | `upload` | `true` | Set to `false` to run without uploading. |
+| `run_download_benchmarks` | `false` | Include the download benchmarks, which download whole NWB files through the DANDI API. The suite leaves them out by default because they are long and need bandwidth and disk space. |
+| `run_incremental_slicing_benchmarks` | empty (left out) | Include the incremental slicing benchmarks: `all` for all of them, or a comma-separated list of modalities (`ecephys`, `ophys`, `icephys`). |
 | `timeout_minutes` | `7200` | Job timeout; the default is the 5-day maximum for self-hosted runners. |
 | `conda_root` | the Miniforge under `_work` | Explicit conda installation to use instead (the directory containing `etc/profile.d/conda.sh`). A conda on `PATH` is never used. |
 | `conda_env_name` | `nwb_benchmarks_runner` | Name of the conda environment created at the start and, unless `keep_conda_env` is set, removed at the end of every job. |
