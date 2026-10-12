@@ -46,6 +46,8 @@ jobs:
       # conda_root: /Users/cody/miniforge3
       # network_interface: en0
       # tshark_path: /Applications/Wireshark.app/Contents/MacOS/tshark
+      # Leave the conda environment in place after the job instead of deleting it.
+      keep_conda_env: true
       # Run options, forwarded from the manual trigger form. Scheduled runs never use debug
       # mode and always upload.
       benchmark_pattern: ${{ inputs.benchmark_pattern || '' }}
