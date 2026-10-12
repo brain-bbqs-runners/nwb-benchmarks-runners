@@ -134,12 +134,12 @@ If needed, set these under `with:` in `runner-<label>.yml`.
 | `upload` | `true` | Set to `false` to run without uploading. |
 | `timeout_minutes` | `7200` | Job timeout; the default is the 5-day maximum for self-hosted runners. |
 | `conda_root` | the Miniforge under `_work` | Explicit conda installation to use instead (the directory containing `etc/profile.d/conda.sh`). A conda on `PATH` is never used. |
-| `conda_env_name` | `nwb_benchmarks_runner` | Name of the conda environment created at the start and removed at the end of every job. |
+| `conda_env_name` | `nwb_benchmarks_runner` | Name of the conda environment created at the start and, unless `keep_conda_env` is set, removed at the end of every job. |
 | `network_interface` | interface of the default route | Interface for network tracking (`en0`, `eth0`, `Ethernet`, ...). Set it if auto-detection picks the wrong one or fails. |
 | `tshark_path` | auto-detected | Absolute path of the `tshark` executable. Searched: the Wireshark copy under `_work`, `PATH`, common locations. Required on Windows. |
 | `use_sudo` | `auto` | `auto` uses `sudo` when it works without a password; `true` requires it (job fails otherwise); `false` never uses it. |
 | `cache_directory` | under `_work` | Passed to `nwb_benchmarks config_set_cache`; the suite downloads whole NWB files, so point it at a large disk if `_work` is on a small one. |
-| `keep_conda_env` | `false` | Keep the conda environment after the job for inspection. |
+| `keep_conda_env` | `false` | Keep the conda environment between jobs. The next job updates it from the environment file instead of rebuilding it, which saves several minutes per run; packages the file does not pin then only change when the file does. |
 | `results_repository` | `NeurodataWithoutBorders/nwb-benchmarks-results` | Repository the results are committed to; the token needs write access to it. |
 | `results_branch` | the repository's default branch | Branch the results are committed to. |
 
