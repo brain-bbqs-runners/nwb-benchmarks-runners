@@ -13,7 +13,7 @@ The folder is a sibling of the runner's own `_temp` and `_tool` folders.
 | Path under `_work/_nwb_benchmarks/` | Notes |
 | --- | --- |
 | `home/` | `HOME` for every job step. Holds `.nwb_benchmarks/{results,machines,environments,logs}` written by the suite, `.nwb_benchmarks/runner/pending/` (files waiting for upload; non-empty after a failed upload, the next run uploads them) and `.nwb_benchmarks/runner/uploaded/` (archive, safe to delete), the download cache `.cache/nwb_benchmarks/`, `.asv-machine.json`, and conda's `.conda/`. |
-| `miniforge3/` | conda, installed by the Set up runner workflow; the only conda the jobs use unless `conda_root` says otherwise. Benchmark environments are created inside it and removed at the end of every job unless `keep_conda_env: true`. |
+| `miniforge3/` | conda, installed by the Set up runner workflow; the only conda the jobs use unless `conda_root` says otherwise. Benchmark environments are created inside it and removed at the end of every job unless `keep_conda_env: true`, in which case the next job updates the existing environment from the environment file instead of rebuilding it, and rebuilds it from scratch once it is 30 days old. |
 | `tools/Wireshark.app/` | macOS only: Wireshark copied by the Set up runner workflow; its `tshark` is used automatically. |
 | `toolchain/` | git and, on Linux, conda-forge's C and C++ compiler, installed from conda-forge by the Set up runner workflow when the machine has none. Its own `bin/` is never put on `PATH`. |
 | `bin/` | Links to `git`, `cc`, `gcc`, `c++` and `g++` in `toolchain/`. The first step of every job puts this folder first on `PATH` and, when it holds the compiler, points `CC` and `CXX` at it. |

@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
-# Creates a fresh conda environment for the nwb-benchmarks checkout and records its
-# location for the later steps of the job.
+# Creates the conda environment for the nwb-benchmarks checkout and records its location
+# for the later steps of the job.
 #
-# A fresh environment every run is deliberate: the benchmarks track performance against
-# the current versions of their dependencies, and the environment id stored with each
-# result is derived from the installed packages.
+# By default the environment is created fresh every run: the benchmarks track performance
+# against the current versions of their dependencies, and the environment id stored with
+# each result is derived from the installed packages. With NWB_BENCHMARKS_KEEP_CONDA_ENV
+# the environment survives between runs (cleanup.sh leaves it in place) and an existing one
+# is updated from the environment file instead of being rebuilt, which is much faster.
+# Packages the file does not pin then only change when the file does, so a kept environment
+# is rebuilt from scratch once it is 30 days old.
 #
 # Inputs (environment variables):
-#   NWB_BENCHMARKS_CLONE_DIR   path to the nwb-benchmarks checkout (required)
-#   NWB_BENCHMARKS_CONDA_ENV   name of the conda environment to (re)create (default: nwb_benchmarks_runner)
-#   CONDA_ROOT                 conda installation to use (optional; auto-detected otherwise)
-#   TSHARK_PATH                explicit path to tshark (optional)
+#   NWB_BENCHMARKS_CLONE_DIR       path to the nwb-benchmarks checkout (required)
+#   NWB_BENCHMARKS_CONDA_ENV       name of the conda environment (default: nwb_benchmarks_runner)
+#   NWB_BENCHMARKS_KEEP_CONDA_ENV  "true" reuses an existing environment of that name
+#   CONDA_ROOT                     conda installation to use (optional; auto-detected otherwise)
+#   TSHARK_PATH                    explicit path to tshark (optional)
 #
 # Outputs (GITHUB_ENV): CONDA_ROOT, NWB_BENCHMARKS_CONDA_ENV
 set -euo pipefail
@@ -21,6 +26,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLONE_DIR="${NWB_BENCHMARKS_CLONE_DIR:?NWB_BENCHMARKS_CLONE_DIR must point at a checkout of nwb-benchmarks}"
 ENV_NAME="${NWB_BENCHMARKS_CONDA_ENV:-nwb_benchmarks_runner}"
+KEEP_CONDA_ENV="$(normalize_bool "${NWB_BENCHMARKS_KEEP_CONDA_ENV:-}" false)"
 ENVIRONMENT_FILE="$CLONE_DIR/environments/nwb_benchmarks.yaml"
 
 [ -f "$ENVIRONMENT_FILE" ] || die "Environment file not found: $ENVIRONMENT_FILE"
@@ -35,13 +41,38 @@ load_conda "$CONDA_ROOT"
 export CONDA_ALWAYS_YES=true
 conda --version
 
-group_start "Create conda environment '$ENV_NAME' from $ENVIRONMENT_FILE"
-if list_conda_env_names | grep -qx -- "$ENV_NAME"; then
-  log "Removing the existing '$ENV_NAME' environment so this run starts from current package versions"
-  conda env remove --name "$ENV_NAME"
+# A kept environment is rebuilt once a month so that packages the environment file does not
+# pin still follow their releases. The marker is written when the environment is created.
+REBUILD_AFTER_DAYS=30
+CREATED_MARKER="$CONDA_ROOT/envs/$ENV_NAME/.nwb_benchmarks_runner_created"
+
+reuse_existing_env=false
+if [ "$KEEP_CONDA_ENV" = true ] && list_conda_env_names | grep -qx -- "$ENV_NAME"; then
+  if [ ! -f "$CREATED_MARKER" ]; then
+    log "The existing '$ENV_NAME' environment has no creation marker; rebuilding it"
+  elif [ -n "$(find "$CREATED_MARKER" -mtime +"$REBUILD_AFTER_DAYS" 2> /dev/null)" ]; then
+    log "The existing '$ENV_NAME' environment is more than $REBUILD_AFTER_DAYS days old; rebuilding it"
+  else
+    reuse_existing_env=true
+  fi
 fi
-conda env create --file "$ENVIRONMENT_FILE" --name "$ENV_NAME" --no-default-packages
-group_end
+
+if [ "$reuse_existing_env" = true ]; then
+  # The pip section of the file installs the checkout itself (`-e ..`), so the update also
+  # picks up the nwb-benchmarks ref cloned for this run.
+  group_start "Update the existing conda environment '$ENV_NAME' from $ENVIRONMENT_FILE"
+  conda env update --file "$ENVIRONMENT_FILE" --name "$ENV_NAME"
+  group_end
+else
+  group_start "Create conda environment '$ENV_NAME' from $ENVIRONMENT_FILE"
+  if list_conda_env_names | grep -qx -- "$ENV_NAME"; then
+    log "Removing the existing '$ENV_NAME' environment so this run starts from current package versions"
+    conda env remove --name "$ENV_NAME"
+  fi
+  conda env create --file "$ENVIRONMENT_FILE" --name "$ENV_NAME" --no-default-packages
+  touch "$CREATED_MARKER" 2> /dev/null || warn "Could not write $CREATED_MARKER; the environment will be rebuilt on the next run"
+  group_end
+fi
 
 group_start "Installed packages"
 conda list --name "$ENV_NAME"
