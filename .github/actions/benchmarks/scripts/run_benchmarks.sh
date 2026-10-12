@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Runs the NWB Benchmarks suite inside the conda environment prepared by
-# setup_environment.sh, then stages the new result files for upload.
+# Runs one benchmark of the NWB Benchmarks suite, chosen at random by `nwb_benchmarks run --random`,
+# inside the conda environment prepared by setup_environment.sh, then stages the new result files
+# for upload. Each scheduled run therefore samples the suite instead of running all of it, and a run
+# that is cut short loses at most that one benchmark. BENCHMARK_PATTERN runs a chosen subset instead.
 #
 # `nwb_benchmarks run` writes its reduced results to ~/.nwb_benchmarks/{results,machines,
 # environments}. The files produced by this run are moved (results) or copied (machine and
@@ -11,7 +13,7 @@
 # Inputs (environment variables):
 #   NWB_BENCHMARKS_CLONE_DIR            path to the nwb-benchmarks checkout (required)
 #   CONDA_ROOT, NWB_BENCHMARKS_CONDA_ENV  written by setup_environment.sh (required)
-#   BENCHMARK_PATTERN                   optional `--bench` pattern; empty runs the full suite
+#   BENCHMARK_PATTERN                   optional `--bench` pattern; empty runs one benchmark at random
 #   DEBUG_MODE                          "true" passes `--debug`; nothing is staged for upload
 #   NWB_BENCHMARKS_USE_SUDO             auto (default) | true | false
 #   NWB_BENCHMARKS_NETWORK_INTERFACE    interface to monitor; auto-detected on macOS/Linux when empty
@@ -118,6 +120,8 @@ before="$(list_results)"
 command=(nwb_benchmarks run)
 if [ -n "$BENCHMARK_PATTERN" ]; then
   command+=(--bench "$BENCHMARK_PATTERN")
+else
+  command+=(--random)
 fi
 if [ "$DEBUG_MODE" = true ]; then
   command+=(--debug)
@@ -141,6 +145,8 @@ status=${PIPESTATUS[0]}
 set -e
 group_end
 log "nwb_benchmarks exited with status $status"
+# `--random` prints the benchmark it chose; keep it for the summary.
+selected_benchmark="$(sed -n 's/^Randomly selected benchmark: //p' "$LOG_FILE" | tail -n 1)"
 
 if [ "$USE_SUDO" = true ]; then
   repair_ownership
@@ -195,7 +201,11 @@ log "$count result file(s) staged in $PENDING_DIR"
   echo "### Benchmark run on \`${RUNNER_LABEL:-$(hostname)}\`"
   echo ""
   echo "- nwb-benchmarks commit: \`$(git -C "$CLONE_DIR" rev-parse --short HEAD)\`"
-  echo "- benchmark pattern: \`${BENCHMARK_PATTERN:-<full suite>}\`"
+  if [ -n "$BENCHMARK_PATTERN" ]; then
+    echo "- benchmark pattern: \`$BENCHMARK_PATTERN\`"
+  else
+    echo "- benchmark (chosen at random): \`${selected_benchmark:-unknown}\`"
+  fi
   echo "- new result files: $count"
   echo "- ran with sudo: $USE_SUDO"
   echo "- nwb_benchmarks exit status: $status"
