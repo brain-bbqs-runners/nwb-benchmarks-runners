@@ -9,8 +9,13 @@ name: Benchmarks (ackermann)
 
 on:
   schedule:
-    # Every hour; each run measures one benchmark chosen at random. Staggered from lbl-mac.
-    - cron: "17 * * * *"
+    # Every hour from noon to midnight Eastern time; each run measures one benchmark chosen at
+    # random. Staggered from lbl-mac. Cron is UTC and ignores daylight saving, so these hours
+    # cover both the EDT window (16:17 to 03:17 UTC) and the EST window (17:17 to 04:17 UTC),
+    # and the `window` job below lets a run through only when it is really noon to midnight
+    # in New York.
+    - cron: "17 16-23 * * *"
+    - cron: "17 0-4 * * *"
   workflow_dispatch:
     inputs:
       benchmark_pattern:
@@ -38,7 +43,27 @@ permissions:
   contents: read
 
 jobs:
+  # Scheduled runs only go ahead between noon and midnight in New York; manual runs always do.
+  window:
+    runs-on: ubuntu-latest
+    outputs:
+      open: ${{ steps.check.outputs.open }}
+    steps:
+      - id: check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          hour="$(TZ=America/New_York date +%H)"
+          if [ "$EVENT_NAME" = workflow_dispatch ] || [ "$hour" -ge 12 ]; then
+            echo "open=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "open=false" >> "$GITHUB_OUTPUT"
+            echo "It is ${hour}:xx in New York; scheduled runs only go ahead from noon to midnight."
+          fi
+
   benchmarks:
+    needs: window
+    if: ${{ needs.window.outputs.open == 'true' }}
     uses: ./.github/workflows/benchmarks.yml
     with:
       runner: ackermann
