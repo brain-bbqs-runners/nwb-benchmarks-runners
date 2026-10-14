@@ -2,9 +2,8 @@
 # (the official LBL benchmarking Mac).
 #
 # One file like this exists per runner or situation. It chooses WHEN to run, WHICH runner
-# to use, how that machine is configured, and WHICH repository secret holds the runner's
-# upload token. Everything else lives in benchmarks.yml. To add a runner, copy
-# templates/runner-workflow.yml and follow README.md.
+# to use, and how that machine is configured. Everything else lives in benchmarks.yml. To add
+# a runner, copy templates/runner-workflow.yml and follow README.md.
 name: Benchmarks (lbl-mac)
 
 on:
@@ -56,5 +55,6 @@ jobs:
       debug: ${{ github.event_name == 'workflow_dispatch' && inputs.debug }}
       upload: ${{ github.event_name != 'workflow_dispatch' || inputs.upload }}
     secrets:
-      # Repository secret holding this runner's token: Settings > Secrets and variables > Actions.
-      RESULTS_UPLOAD_TOKEN: ${{ secrets.RESULTS_UPLOAD_TOKEN_LBL_MAC }}
+      # The upload token all runners share (Settings > Secrets and variables > Actions). Only
+      # the upload job, on a GitHub-hosted runner, uses it; this machine never receives it.
+      RESULTS_UPLOAD_TOKEN: ${{ secrets.RESULTS_UPLOAD_TOKEN }}

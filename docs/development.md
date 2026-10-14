@@ -12,7 +12,7 @@ The folder is a sibling of the runner's own `_temp` and `_tool` folders.
 
 | Path under `_work/_nwb_benchmarks/` | Notes |
 | --- | --- |
-| `home/` | `HOME` for every job step. Holds `.nwb_benchmarks/{results,machines,environments,logs}` written by the suite, `.nwb_benchmarks/runner/pending/` (files waiting for upload; non-empty after a failed upload, the next run uploads them) and `.nwb_benchmarks/runner/uploaded/` (archive, safe to delete), the download cache `.cache/nwb_benchmarks/`, `.asv-machine.json`, and conda's `.conda/`. |
+| `home/` | `HOME` for every job step. Holds `.nwb_benchmarks/{results,machines,environments,logs}` written by the suite, `.nwb_benchmarks/runner/pending/` (files not yet seen in the results repository; every run sends them to the upload job again until they appear there) and `.nwb_benchmarks/runner/uploaded/` (archive, safe to delete), the download cache `.cache/nwb_benchmarks/`, `.asv-machine.json`, and conda's `.conda/`. |
 | `miniforge3/` | conda, installed by the Set up runner workflow; the only conda the jobs use unless `conda_root` says otherwise. Benchmark environments are created inside it and removed at the end of every job unless `keep_conda_env: true`, in which case the next job updates the existing environment from the environment file instead of rebuilding it, and rebuilds it from scratch once it is 30 days old. |
 | `tools/Wireshark.app/` | macOS only: Wireshark copied by the Set up runner workflow; its `tshark` is used automatically. |
 | `toolchain/` | git and, on Linux, conda-forge's C and C++ compiler, installed from conda-forge by the Set up runner workflow when the machine has none. Its own `bin/` is never put on `PATH`. |
@@ -31,21 +31,41 @@ Result files stay owned by the runner's user even after a `sudo` run; the workfl
   On macOS a compiler cannot come from conda-forge, because it needs Apple's SDK; if a build ever needs one, run `xcode-select --install` once on the machine.
 - [`tshark`](https://tshark.dev/setup/install) (part of Wireshark), for the network tracking benchmarks. The workflow installs it: on macOS it copies `Wireshark.app` under `_work`, where its `tshark` is found automatically; on Linux it installs the distribution package when the runner's user has passwordless `sudo`, and otherwise prints the command. On Windows install Wireshark and set `tshark_path`.
 
-## Reusable workflow and composite action
+## Reusable workflow and composite actions
 
-The per-runner file calls the reusable workflow `benchmarks.yml`, which only adds the job-level settings (which runner, one job per runner at a time, timeout) around the **composite action** `.github/actions/benchmarks`.
-The action holds every step and its shell scripts, so it can also be used on its own from any workflow, in this repository or another one:
+The per-runner file calls the reusable workflow `benchmarks.yml`, which runs two jobs, each around a **composite action**:
+
+- `benchmarks`, on the self-hosted runner, adds the job-level settings (which runner, one job per runner at a time, timeout) around `.github/actions/benchmarks`. That action runs the suite, then reads the results repository without a token to tell which pending files still need uploading, and saves those as a workflow artifact named in its `pending-artifact` output.
+- `upload`, on `ubuntu-latest`, runs `.github/actions/upload-results`, which downloads that artifact and commits it with the `RESULTS_UPLOAD_TOKEN` secret. It is skipped when there is nothing to upload (debug runs, `upload: false`).
+
+Keeping the upload on a GitHub-hosted runner is what lets every runner share one token without any self-hosted machine receiving it.
+The actions hold every step and their shell scripts, so they can also be used on their own from any workflow, in this repository or another one:
 
 ```yaml
-steps:
-  - uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
-    with:
-      runner-label: lbl_laptop
-      results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN_LBL_LAPTOP }}
-      # same options as the workflow inputs below, with dashes instead of underscores
+jobs:
+  benchmarks:
+    runs-on: [self-hosted, lbl_laptop]
+    outputs:
+      pending_artifact: ${{ steps.benchmarks.outputs.pending-artifact }}
+    steps:
+      - id: benchmarks
+        uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
+        with:
+          runner-label: lbl_laptop
+          # same options as the workflow inputs below, with dashes instead of underscores
+  upload:
+    needs: benchmarks
+    if: ${{ needs.benchmarks.outputs.pending_artifact != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/upload-results@dev
+        with:
+          artifact-name: ${{ needs.benchmarks.outputs.pending_artifact }}
+          runner-label: lbl_laptop
+          results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN }}
 ```
 
-The inputs of the action are the workflow inputs with dashes instead of underscores; `lint.yml` checks that the action only references inputs it declares.
+The inputs of the actions are the workflow inputs with dashes instead of underscores; `lint.yml` checks that each action only references inputs it declares.
 
 ## Operational notes
 
@@ -56,7 +76,9 @@ The inputs of the action are the workflow inputs with dashes instead of undersco
 - A runner can be limited to part of the day: `runner-ackermann.yml` runs from noon to midnight Eastern time. GitHub's cron is UTC and ignores daylight saving, so its cron lines cover the UTC hours of both the EDT and the EST window and a small `window` job on a GitHub-hosted runner checks the New York clock and skips the benchmark job outside the window; manual runs always go ahead.
 - The pool the random pick chooses from is whatever the suite discovers on that machine: the network tracking benchmarks need `tshark`, and the download and incremental slicing benchmarks need `run_download_benchmarks` and `run_incremental_slicing_benchmarks` in the runner's workflow file, since the suite leaves them out otherwise. The job summary says which of the opt-in parts were included.
 - The job fails when `nwb_benchmarks run` produces no results file. A non-zero exit *after* results were written is tolerated and reported as a warning: versions of `nwb-benchmarks` from before [NeurodataWithoutBorders/nwb-benchmarks#198](https://github.com/NeurodataWithoutBorders/nwb-benchmarks/pull/198) still try to POST to the retired server and fail at that final step, and the workflow uploads the files itself.
-- Every job stores its console log and the new result files as a workflow artifact for 30 days, so results of a failed upload can also be recovered from the Actions UI.
+- Every benchmark job stores its console log and the new result files as a workflow artifact for 30 days, so results of a failed upload can also be recovered from the Actions UI.
+- The files handed to the upload job are a separate artifact, kept for 7 days. A failed upload job can be re-run on its own while it exists; otherwise the files stay pending on the machine and its next run sends them again.
+- A pending file leaves `pending/` once the benchmark job sees it in the results repository, which it reads with a blob-less shallow clone (file names and content hashes only, no token). If the repository cannot be read, every pending file is sent to the upload job, which skips the ones already there.
 - The upload never replaces a result or environment file the repository already has, so a retry cannot duplicate or alter results. A machine file is the exception: its id leaves the machine's name out, so when its content changes (for example the name after a rename) the upload replaces the repository's copy under the same id.
 - Machine names in the results stay anonymous: `nwb_benchmarks` records `github-<timestamp>` whenever it runs under GitHub Actions, while the stable machine id is a hash of the hardware description.
 
@@ -66,8 +88,8 @@ The inputs of the action are the workflow inputs with dashes instead of undersco
 | --- | --- |
 | Job stays "Waiting for a runner to pick up this job" | The runner is offline or its label differs from the workflow's `runner` value. Check **Settings → Actions → Runners** and `./svc.sh status` on the machine. |
 | `No conda installation under .../_work/_nwb_benchmarks/miniforge3` | Run the **Set up runner** workflow for this runner, or set the `conda_root` input to use an installation elsewhere. |
-| `No upload token was passed` / `RESULTS_UPLOAD_TOKEN is empty` | The repository secret named in the workflow file's `secrets:` block does not exist (check the spelling: uppercase, underscores), or the workflow file does not pass it. |
-| Push rejected with 403 / authentication failed | The token expired or its owner lacks write access to `results_repository`. Replace the secret. |
+| Upload job fails with `RESULTS_UPLOAD_TOKEN is empty` | The repository secret `RESULTS_UPLOAD_TOKEN` does not exist, or the runner's workflow file does not pass it in its `secrets:` block. The result files stay pending on the machine and go with its next run once fixed. |
+| Upload job's push rejected with 403 / authentication failed | The token expired or its owner lacks write access to `results_repository`. Replace the `RESULTS_UPLOAD_TOKEN` secret. |
 | Network tracking benchmarks skipped or failing | Install `tshark` or set `tshark_path`; set `network_interface`; grant passwordless `sudo` (macOS/Linux). |
 | `Passwordless sudo is not available` warning | Grant it as in step 2 of "Adding a runner" in the README, pick an option under "Without passwordless `sudo`", or set `use_sudo: false` to accept skipping the network tracking benchmarks. |
 | `Permission denied` under `_work/_nwb_benchmarks` | Leftovers from an interrupted `sudo` run: `sudo chown -R "$(id -un)" <runner>/_work/_nwb_benchmarks`. |

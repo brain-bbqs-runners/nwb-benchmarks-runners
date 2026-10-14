@@ -1,28 +1,29 @@
-# Composite action: runs the NWB Benchmarks suite on the current runner and commits the
-# results to the results repository. This is the common piece every runner workflow ends
-# up executing; .github/workflows/benchmarks.yml wraps it with the job-level settings
-# (runner selection, concurrency, timeout). It can also be used directly:
+# Composite action: runs the NWB Benchmarks suite on the current (self-hosted) runner and
+# saves the result files still to be uploaded as a workflow artifact. It holds no token: the
+# upload-results action commits that artifact to the results repository from a job on a
+# GitHub-hosted runner. This is the common piece every runner workflow ends up executing;
+# .github/workflows/benchmarks.yml wraps it with the job-level settings (runner selection,
+# concurrency, timeout) and adds the upload job. It can also be used directly:
 #
-#   - uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
+#   - id: benchmarks
+#     uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
 #     with:
 #       runner-label: lbl_laptop
-#       results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN_LBL_LAPTOP }}
+#
+# then, in a job on a GitHub-hosted runner, pass its pending-artifact output to
+# CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/upload-results@dev.
 #
 # The action is self-contained (its shell scripts live in ./scripts), so the calling
 # workflow does not need to check out this repository first.
 #
 # Composite-action inputs are always strings: booleans arrive as "true" / "false".
 name: NWB Benchmarks run
-description: Run the NWB Benchmarks suite on this runner and upload the results with the runner's own token.
+description: Run the NWB Benchmarks suite on this runner and save the result files to upload as a workflow artifact.
 
 inputs:
   # --- Identity -----------------------------------------------------------------------
   runner-label:
-    description: Label of this runner, used in commit messages, branch names, and the artifact name. Defaults to the runner's name.
-    required: false
-    default: ""
-  results-upload-token:
-    description: Token with write access to results-repository. Required unless upload is "false" or debug is "true".
+    description: Label of this runner, used in the artifact names. Defaults to the runner's name.
     required: false
     default: ""
 
@@ -44,7 +45,7 @@ inputs:
     required: false
     default: "false"
   upload:
-    description: '"false" skips the upload.'
+    description: '"false" saves nothing for the upload job (pending-artifact stays empty).'
     required: false
     default: "true"
   run-download-benchmarks:
@@ -87,8 +88,9 @@ inputs:
     default: "false"
 
   # --- Upload configuration -----------------------------------------------------------
+  # Read without a token, to recognize the pending files an earlier upload already committed.
   results-repository:
-    description: Repository (owner/name) the results are committed to. The token needs write access to it.
+    description: Repository (owner/name) the results are committed to.
     required: false
     default: NeurodataWithoutBorders/nwb-benchmarks-results
   results-branch:
@@ -103,6 +105,9 @@ outputs:
   used-sudo:
     description: Whether the suite ran under sudo ("true" / "false").
     value: ${{ steps.run.outputs.used_sudo }}
+  pending-artifact:
+    description: Name of the workflow artifact holding the result files to upload with the upload-results action. Empty when there is nothing to upload.
+    value: ${{ steps.collect.outputs.artifact_name }}
 
 runs:
   using: composite
@@ -114,22 +119,8 @@ runs:
       shell: bash
       run: bash "$GITHUB_ACTION_PATH/scripts/localize.sh"
 
-    # Fail in seconds rather than after hours of benchmarking when the token is missing.
-    - name: Check that an upload token was passed
-      if: ${{ inputs.debug != 'true' && inputs.upload == 'true' }}
-      shell: bash
-      env:
-        RESULTS_UPLOAD_TOKEN: ${{ inputs.results-upload-token }}
-        LABEL: ${{ inputs.runner-label }}
-      run: |
-        if [ -z "$RESULTS_UPLOAD_TOKEN" ]; then
-          echo "::error::No upload token was passed for runner '${LABEL:-$RUNNER_NAME}'. Add a repository secret for this runner (convention: RESULTS_UPLOAD_TOKEN_<LABEL>) and pass it as results-upload-token, or run with upload disabled."
-          exit 1
-        fi
-        echo "Upload token present."
-
     # Composite actions have no action-level `env`, so the configuration shared by the
-    # scripts is exported once here. The token is deliberately not among these variables.
+    # scripts is exported once here.
     - name: Configure
       shell: bash
       env:
@@ -192,14 +183,26 @@ runs:
         RUNNER_ARTIFACT_DIR: ${{ runner.temp }}/nwb-benchmarks-artifact
       run: bash "$GITHUB_ACTION_PATH/scripts/run_benchmarks.sh"
 
-    - name: Upload results to the results repository
+    # The upload itself happens in a job on a GitHub-hosted runner, which holds the token.
+    # This only decides which pending files still need it and hands them over as an artifact.
+    - name: Collect the result files to upload
+      id: collect
       if: ${{ inputs.debug != 'true' && inputs.upload == 'true' }}
       shell: bash
       env:
-        RESULTS_UPLOAD_TOKEN: ${{ inputs.results-upload-token }}
         RESULTS_REPOSITORY: ${{ inputs.results-repository }}
         RESULTS_BRANCH: ${{ inputs.results-branch }}
-      run: bash "$GITHUB_ACTION_PATH/scripts/upload_results.sh"
+        PENDING_ARTIFACT_DIR: ${{ runner.temp }}/nwb-benchmarks-pending
+      run: bash "$GITHUB_ACTION_PATH/scripts/collect_pending.sh"
+
+    - name: Save the result files to upload as a workflow artifact
+      if: ${{ steps.collect.outputs.artifact_name != '' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.collect.outputs.artifact_name }}
+        path: ${{ runner.temp }}/nwb-benchmarks-pending/
+        if-no-files-found: error
+        retention-days: 7
 
     - name: Save console log and result files as a workflow artifact
       if: ${{ always() }}

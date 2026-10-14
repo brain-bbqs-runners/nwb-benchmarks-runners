@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Commits the staged result files to the results repository using this runner's token.
+# Commits result files to the results repository. The upload job of the Benchmarks workflow
+# runs this on a GitHub-hosted runner, with the files the benchmark job collected on the
+# self-hosted machine (collect_pending.sh) and the one repository-wide upload token, so the
+# token never reaches a self-hosted machine.
 #
 # The files are committed straight to RESULTS_BRANCH of RESULTS_REPOSITORY, like the retired
 # upload server did. The token therefore needs write access to that repository. Concurrent
@@ -8,24 +11,25 @@
 # Result and environment files already present in the repository (same file name) are
 # skipped, so re-running after a partial failure never duplicates results. A machine file
 # keeps its name when its content changes (the machine id leaves the machine's name out), so
-# a machine file whose content differs from the repository's copy replaces it. Uploaded files
-# are moved from the pending to the uploaded directory.
+# a machine file whose content differs from the repository's copy replaces it. The machine
+# keeps every file pending until it sees the file in the repository, so files whose upload
+# fails are sent again by the next run.
 #
 # Inputs (environment variables):
+#   RESULTS_FILES_DIR            directory holding the files to commit, in any layout (required)
 #   RESULTS_UPLOAD_TOKEN         token with write access to RESULTS_REPOSITORY (required)
 #   RESULTS_REPOSITORY           owner/name to push to (default: NeurodataWithoutBorders/nwb-benchmarks-results)
 #   RESULTS_BRANCH               branch to push to (default: the repository's default branch)
 #   RESULTS_COMMIT_AUTHOR_NAME / RESULTS_COMMIT_AUTHOR_EMAIL  identity for the commits
 #   RESULTS_REMOTE_URL           advanced: override the git URL (used by the local tests)
-#   RUNNER_LABEL                 label of this runner, used in commit messages
-#   RUNNER_PENDING_DIR           staging directory (default: ~/.nwb_benchmarks/runner/pending)
-#   RUNNER_UPLOADED_DIR          archive of uploaded files (default: ~/.nwb_benchmarks/runner/uploaded)
+#   RUNNER_LABEL                 label of the runner that produced the files, used in commit messages
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common.sh
 . "$SCRIPT_DIR/common.sh"
 
+FILES_DIR="${RESULTS_FILES_DIR:?RESULTS_FILES_DIR must name the directory holding the files to commit}"
 RUNNER_LABEL="${RUNNER_LABEL:-$(hostname)}"
 TOKEN="${RESULTS_UPLOAD_TOKEN:-}"
 REPOSITORY="${RESULTS_REPOSITORY:-NeurodataWithoutBorders/nwb-benchmarks-results}"
@@ -33,9 +37,6 @@ BRANCH="${RESULTS_BRANCH:-}"
 REMOTE_URL="${RESULTS_REMOTE_URL:-https://github.com/$REPOSITORY.git}"
 AUTHOR_NAME="${RESULTS_COMMIT_AUTHOR_NAME:-nwb-benchmarks-runner[bot]}"
 AUTHOR_EMAIL="${RESULTS_COMMIT_AUTHOR_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
-BENCHMARKS_HOME="$HOME/.nwb_benchmarks"
-PENDING_DIR="${RUNNER_PENDING_DIR:-$BENCHMARKS_HOME/runner/pending}"
-UPLOADED_DIR="${RUNNER_UPLOADED_DIR:-$BENCHMARKS_HOME/runner/uploaded}"
 TEMP_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 WORKDIR="$TEMP_DIR/nwb-benchmarks-results-upload"
 STEP_SUMMARY="${GITHUB_STEP_SUMMARY:-/dev/null}"
@@ -47,21 +48,21 @@ else
   RUN_URL="(local run)"
 fi
 
-# --- Pending files ------------------------------------------------------------------
-PENDING=()
-if [ -d "$PENDING_DIR" ]; then
+# --- Files to commit ----------------------------------------------------------------
+FILES=()
+if [ -d "$FILES_DIR" ]; then
   while IFS= read -r file; do
-    PENDING+=("$file")
-  done < <(find "$PENDING_DIR" -type f -name '*.json' | sort)
+    FILES+=("$file")
+  done < <(find "$FILES_DIR" -type f -name '*.json' | sort)
 fi
 
-if [ "${#PENDING[@]}" -eq 0 ]; then
-  log "No pending result files in $PENDING_DIR; nothing to upload."
+if [ "${#FILES[@]}" -eq 0 ]; then
+  log "No result files in $FILES_DIR; nothing to upload."
   exit 0
 fi
-log "${#PENDING[@]} pending file(s) in $PENDING_DIR"
+log "${#FILES[@]} file(s) to upload from runner '$RUNNER_LABEL'"
 
-[ -n "$TOKEN" ] || die "RESULTS_UPLOAD_TOKEN is empty. Add a repository secret for runner '$RUNNER_LABEL' (convention: RESULTS_UPLOAD_TOKEN_<LABEL>) and pass it as RESULTS_UPLOAD_TOKEN in the runner's workflow file. The staged files are kept and will be uploaded by the next successful run."
+[ -n "$TOKEN" ] || die "RESULTS_UPLOAD_TOKEN is empty. Add the repository secret RESULTS_UPLOAD_TOKEN (Settings > Secrets and variables > Actions) and make sure the runner's workflow file passes it. The runner keeps the files pending and sends them again with its next run."
 
 # --- Authentication -----------------------------------------------------------------
 # The token travels in an HTTP header passed on the command line of each git call, so it
@@ -73,27 +74,16 @@ authenticated_git() {
 }
 
 # --- Helpers ------------------------------------------------------------------------
-# Prints the results-repository subdirectory for a file name, mirroring the layout the
-# retired upload server used.
-subdir_for() {
-  case "$1" in
-    environment-*.json) printf 'environments\n' ;;
-    machine-*.json) printf 'machines\n' ;;
-    *_results.json) printf 'results\n' ;;
-    *) return 1 ;;
-  esac
-}
-
-# Copies the pending files that are not yet in the clone, and the machine files whose content
+# Copies the files that are not yet in the clone, and the machine files whose content
 # changed, and stages them. Sets ADDED_COUNT (files added or replaced), SKIPPED_COUNT, and
 # ADDED_LIST (markdown bullet list).
-stage_pending() {
+stage_files() {
   ADDED_COUNT=0
   SKIPPED_COUNT=0
   ADDED_LIST=""
   mkdir -p "$WORKDIR/results" "$WORKDIR/machines" "$WORKDIR/environments"
   local file name subdir note
-  for file in "${PENDING[@]}"; do
+  for file in "${FILES[@]}"; do
     name="$(basename "$file")"
     if ! subdir="$(subdir_for "$name")"; then
       warn "Skipping unrecognized file $name"
@@ -121,17 +111,6 @@ commit_staged() {
     -m "$(printf 'Workflow run: %s\n\nFiles:\n%s' "$RUN_URL" "$ADDED_LIST")"
 }
 
-archive_pending() {
-  local file name subdir
-  for file in "${PENDING[@]}"; do
-    name="$(basename "$file")"
-    subdir="$(subdir_for "$name")" || subdir="unrecognized"
-    mkdir -p "$UPLOADED_DIR/$subdir"
-    mv "$file" "$UPLOADED_DIR/$subdir/$name"
-  done
-  log "Moved ${#PENDING[@]} file(s) from $PENDING_DIR to $UPLOADED_DIR"
-}
-
 cleanup() {
   cd / && rm -rf "$WORKDIR"
 }
@@ -152,10 +131,9 @@ if [ -z "$BRANCH" ]; then
   log "Using the default branch of $REPOSITORY: $BRANCH"
 fi
 
-stage_pending
+stage_files
 if [ "$ADDED_COUNT" -eq 0 ]; then
-  log "All $SKIPPED_COUNT pending file(s) already exist in the repository."
-  archive_pending
+  log "All $SKIPPED_COUNT file(s) already exist in the repository."
   exit 0
 fi
 log "$ADDED_COUNT new file(s) to add ($SKIPPED_COUNT already present)"
@@ -174,9 +152,9 @@ while [ "$attempt" -le "$MAX_PUSH_ATTEMPTS" ]; do
     sleep $((attempt * 10))
     authenticated_git -C "$WORKDIR" fetch --quiet --depth 1 "$REMOTE_URL" "$BRANCH"
     git -C "$WORKDIR" reset --quiet --hard FETCH_HEAD
-    stage_pending
+    stage_files
     if [ "$ADDED_COUNT" -eq 0 ]; then
-      log "All pending files are present in the repository after re-syncing."
+      log "All files are present in the repository after re-syncing."
       pushed=true
       break
     fi
@@ -184,7 +162,7 @@ while [ "$attempt" -le "$MAX_PUSH_ATTEMPTS" ]; do
   fi
   attempt=$((attempt + 1))
 done
-[ "$pushed" = true ] || die "Could not push to $REPOSITORY ($BRANCH) after $MAX_PUSH_ATTEMPTS attempts. The staged files are kept and will be retried by the next run."
+[ "$pushed" = true ] || die "Could not push to $REPOSITORY ($BRANCH) after $MAX_PUSH_ATTEMPTS attempts. The runner keeps the files pending and sends them again with its next run."
 
 if [ "$ADDED_COUNT" -gt 0 ]; then
   commit_sha="$(git -C "$WORKDIR" rev-parse HEAD)"
@@ -197,5 +175,3 @@ if [ "$ADDED_COUNT" -gt 0 ]; then
     echo "$ADDED_LIST"
   } >> "$STEP_SUMMARY"
 fi
-
-archive_pending

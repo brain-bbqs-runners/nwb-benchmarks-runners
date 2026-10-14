@@ -1,14 +1,18 @@
-# Reusable workflow: runs the NWB Benchmarks suite on ONE self-hosted runner and
-# commits the results to the results repository with that runner's own token.
+# Reusable workflow: runs the NWB Benchmarks suite on ONE self-hosted runner, then commits
+# the results to the results repository from a GitHub-hosted runner.
 #
 # Do not schedule this workflow directly. Each runner (or "situation") gets its own small
 # caller workflow, generated from templates/runner-workflow.yml, which picks the schedule,
 # names the runner label, describes the machine through the inputs below, and passes the
-# runner's repository secret (RESULTS_UPLOAD_TOKEN_<LABEL>) as RESULTS_UPLOAD_TOKEN.
+# repository secret RESULTS_UPLOAD_TOKEN, the one upload token all runners share.
 #
-# This workflow only adds the job-level settings (which runner, one job per runner at a
-# time, timeout). All the steps live in the composite action .github/actions/benchmarks,
-# which other workflows can also use directly.
+# Two jobs:
+#   benchmarks  on the self-hosted runner: runs the suite and saves the result files still to
+#               be uploaded as a workflow artifact (composite action .github/actions/benchmarks).
+#               It never sees the upload token.
+#   upload      on a GitHub-hosted runner: commits that artifact to the results repository
+#               with the token (composite action .github/actions/upload-results).
+# Both actions can also be used directly from other workflows.
 name: Benchmarks
 
 on:
@@ -42,7 +46,7 @@ on:
         type: boolean
         default: false
       upload:
-        description: Upload the results to the results repository.
+        description: Upload the results to the results repository (in a separate job on a GitHub-hosted runner).
         required: false
         type: boolean
         default: true
@@ -101,7 +105,7 @@ on:
 
       # --- Upload configuration ---------------------------------------------------------
       results_repository:
-        description: Repository (owner/name) the results are committed to. The token needs write access to it.
+        description: Repository (owner/name) the results are committed to. The upload token needs write access to it.
         required: false
         type: string
         default: NeurodataWithoutBorders/nwb-benchmarks-results
@@ -114,8 +118,8 @@ on:
     secrets:
       RESULTS_UPLOAD_TOKEN:
         description: >-
-          Token with write access to results_repository. Pass this runner's repository secret
-          (convention: RESULTS_UPLOAD_TOKEN_<LABEL>, e.g. secrets.RESULTS_UPLOAD_TOKEN_LBL_MAC).
+          Token with write access to results_repository: pass the repository secret
+          RESULTS_UPLOAD_TOKEN. Only the upload job, on a GitHub-hosted runner, uses it.
           Not needed when upload is false or debug is true.
         required: false
 
@@ -133,17 +137,19 @@ jobs:
       group: nwb-benchmarks-${{ inputs.runner }}
       cancel-in-progress: false
     timeout-minutes: ${{ inputs.timeout_minutes }}
+    outputs:
+      pending_artifact: ${{ steps.benchmarks.outputs.pending-artifact }}
     steps:
       - name: Check out the benchmarks action
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Run the benchmarks and upload the results
+      - name: Run the benchmarks and collect the result files to upload
+        id: benchmarks
         uses: ./.github/actions/benchmarks
         with:
           runner-label: ${{ inputs.runner }}
-          results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN }}
           nwb-benchmarks-repository: ${{ inputs.nwb_benchmarks_repository }}
           nwb-benchmarks-ref: ${{ inputs.nwb_benchmarks_ref }}
           benchmark-pattern: ${{ inputs.benchmark_pattern }}
@@ -158,5 +164,29 @@ jobs:
           use-sudo: ${{ inputs.use_sudo }}
           cache-directory: ${{ inputs.cache_directory }}
           keep-conda-env: ${{ inputs.keep_conda_env }}
+          results-repository: ${{ inputs.results_repository }}
+          results-branch: ${{ inputs.results_branch }}
+
+  # Runs on a GitHub-hosted runner so the upload token never reaches the self-hosted machine.
+  # If it fails, the machine keeps the files pending and sends them again with its next run;
+  # re-running this job alone also works while the artifact is kept (7 days).
+  upload:
+    name: ${{ inputs.runner }} upload
+    needs: benchmarks
+    if: ${{ needs.benchmarks.outputs.pending_artifact != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the upload action
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Commit the result files to the results repository
+        uses: ./.github/actions/upload-results
+        with:
+          artifact-name: ${{ needs.benchmarks.outputs.pending_artifact }}
+          runner-label: ${{ inputs.runner }}
+          results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN }}
           results-repository: ${{ inputs.results_repository }}
           results-branch: ${{ inputs.results_branch }}
