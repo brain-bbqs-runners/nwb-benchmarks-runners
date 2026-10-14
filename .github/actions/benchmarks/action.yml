@@ -6,12 +6,12 @@
 # concurrency, timeout) and adds the upload job. It can also be used directly:
 #
 #   - id: benchmarks
-#     uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
+#     uses: brain-bbqs-runners/nwb-benchmarks-runners/.github/actions/benchmarks@main
 #     with:
 #       runner-label: lbl_laptop
 #
 # then, in a job on a GitHub-hosted runner, pass its pending-artifact output to
-# CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/upload-results@dev.
+# brain-bbqs-runners/nwb-benchmarks-runners/.github/actions/upload-results@main.
 #
 # The action is self-contained (its shell scripts live in ./scripts), so the calling
 # workflow does not need to check out this repository first.

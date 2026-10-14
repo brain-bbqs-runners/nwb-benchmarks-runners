@@ -123,7 +123,7 @@ Copy `templates/runner-workflow.yml` to `.github/workflows/runner-<label>.yml` a
 
 The template already passes the shared upload token, so a new runner needs no secret of its own.
 
-Open a pull request to `dev`.
+Open a pull request to `main`.
 
 ### Workflow inputs
 

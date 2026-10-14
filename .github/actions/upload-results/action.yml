@@ -4,7 +4,7 @@
 # self-hosted machine. .github/workflows/benchmarks.yml runs it in its upload job. It can also
 # be used directly, in a job that needs the benchmark job:
 #
-#   - uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/upload-results@dev
+#   - uses: brain-bbqs-runners/nwb-benchmarks-runners/.github/actions/upload-results@main
 #     with:
 #       artifact-name: ${{ needs.benchmarks.outputs.pending_artifact }}
 #       runner-label: lbl_laptop
