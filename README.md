@@ -22,8 +22,6 @@ Each contributor registers one or more of their own machines as self-hosted runn
 
 A runner is described by **one workflow file** `.github/workflows/runner-<label>.yml`, which names the runner label (e.g. `lbl_laptop`), picks the schedule, and sets any machine-specific inputs (conda location, network interface, and so on).
 
-All runners share **one upload token**, the repository secret `RESULTS_UPLOAD_TOKEN`, set up once for the repository (see [The upload token](#the-upload-token)).
-Only the upload job, which runs on a GitHub-hosted runner, uses it; the self-hosted machines never receive it.
 
 Every run has two jobs.
 The benchmark job, on the self-hosted runner:
