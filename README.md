@@ -1,4 +1,8 @@
-# NWB Benchmarks (Runners)
+<p align="center">
+  <img src="docs/branding/nwb-benchmarks-runner.svg" width="250" alt="NWB Benchmarks runner logo"/>
+
+  <h1 align="center">NWB Benchmarks (Runners)</h1>
+</p>
 
 Scheduled runs of the [NWB Benchmarks](https://github.com/NeurodataWithoutBorders/nwb-benchmarks) suite on self-hosted GitHub Actions runners, with the results committed to [nwb-benchmarks-results](https://github.com/NeurodataWithoutBorders/nwb-benchmarks-results).
 
