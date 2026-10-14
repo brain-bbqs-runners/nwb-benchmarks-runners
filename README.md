@@ -11,9 +11,7 @@ Each contributor registers one or more of their own machines as self-hosted runn
   - [1. Register the self-hosted runner](#1-register-the-self-hosted-runner)
   - [2. Grant the runner's user passwordless `sudo`](#2-grant-the-runners-user-passwordless-sudo)
   - [3. Set up the machine with the Set up runner workflow](#3-set-up-the-machine-with-the-set-up-runner-workflow)
-  - [4. Create the upload token](#4-create-the-upload-token)
-  - [5. Store the token as a repository secret](#5-store-the-token-as-a-repository-secret)
-  - [6. Add the per-runner workflow](#6-add-the-per-runner-workflow)
+  - [4. Add the per-runner workflow](#4-add-the-per-runner-workflow)
   - [Workflow inputs](#workflow-inputs)
 - [Other setups (optional)](#other-setups-optional)
   - [Without passwordless `sudo`](#without-passwordless-sudo)
@@ -21,21 +19,19 @@ Each contributor registers one or more of their own machines as self-hosted runn
 
 ## How it works
 
-A runner is described by:
+A runner is described by **one workflow file** `.github/workflows/runner-<label>.yml`, which names the runner label (e.g. `lbl_laptop`), picks the schedule, and sets any machine-specific inputs (conda location, network interface, and so on).
 
-- **one workflow file** `.github/workflows/runner-<label>.yml`, which names the runner label (e.g. `lbl_laptop`), picks the schedule, and sets any machine-specific inputs (conda location, network interface, and so on)
-- **one repository secret** `RESULTS_UPLOAD_TOKEN_<LABEL>` (the label in uppercase, dashes turned into underscores, e.g. `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`), which the workflow file passes to the reusable workflow as `RESULTS_UPLOAD_TOKEN`.
-- **Secrets are passed explicitly**, never inherited. A job only ever receives the token of the runner it runs on.
+Every job on a self-hosted runner:
 
-Every job on a runner:
+1. Clones `nwb-benchmarks` at the requested ref.
+2. Creates a **fresh** conda environment from `environments/nwb_benchmarks.yaml`. Fresh on purpose: the benchmarks track performance against current dependency versions, and the environment id stored with each result is derived from the installed packages.
+3. Runs `nwb_benchmarks run --random` from the clone under `sudo -E`, because the network tracking benchmarks need root. Each run measures one benchmark chosen at random, so the suite is sampled over many short runs rather than run in one long one, and a run that is cut short loses at most that benchmark. Only this command runs as root, and the console output is saved as a job artifact.
+4. Moves the new files from `~/.nwb_benchmarks/{results,machines,environments}` into `~/.nwb_benchmarks/runner/pending/`.
+5. Reads the results repository, without a token, and moves the pending files it already has to `~/.nwb_benchmarks/runner/uploaded/`. The other pending files, this run's and any whose earlier upload failed, are saved as a workflow artifact for the upload job.
+6. Removes the clone and the conda environment, and gives the files written under `sudo` back to the runner's user.
 
-1. Fails immediately if it is supposed to upload but no token was passed, so a misnamed secret costs seconds rather than hours.
-2. Clones `nwb-benchmarks` at the requested ref.
-3. Creates a **fresh** conda environment from `environments/nwb_benchmarks.yaml`. Fresh on purpose: the benchmarks track performance against current dependency versions, and the environment id stored with each result is derived from the installed packages.
-4. Runs `nwb_benchmarks run --random` from the clone under `sudo -E`, because the network tracking benchmarks need root. Each run measures one benchmark chosen at random, so the suite is sampled over many short runs rather than run in one long one, and a run that is cut short loses at most that benchmark. Only this command runs as root, and the console output is saved as a job artifact.
-5. Moves the new files from `~/.nwb_benchmarks/{results,machines,environments}` into `~/.nwb_benchmarks/runner/pending/`.
-6. Clones the results repository, copies in every pending file that is not already there, commits, and pushes with the runner's token (retrying if another runner pushed first). Uploaded files move to `~/.nwb_benchmarks/runner/uploaded/`. If the upload fails, the files stay pending and go with the next run.
-7. Removes the clone and the conda environment, and gives the files written under `sudo` back to the runner's user.
+The upload job, on a GitHub-hosted runner, then downloads that artifact, clones the results repository, copies in every file that is not already there, commits, and pushes with the [upload token](docs/development.md#the-upload-token) (retrying if another runner pushed first).
+If the upload fails, the files stay pending on the machine and go with its next run.
 
 ## Adding a runner
 
@@ -47,7 +43,7 @@ Machines without passwordless `sudo`, and native Windows, are covered under [Oth
 ### 1. Register the self-hosted runner
 
 First pick the **runner label**: lowercase letters, digits, dashes, and underscores, e.g. `lbl_laptop`.
-It is the one string that ties everything together: the workflow file is `runner-<label>.yml` and selects the machine with `runs-on: [self-hosted, <label>]`, then the secret is `RESULTS_UPLOAD_TOKEN_<LABEL>` (all uppercase characters separate with underscores; e.g., `LBL_LAPTOP`).
+It is the one string that ties everything together: the workflow file is `runner-<label>.yml` and selects the machine with `runs-on: [self-hosted, <label>]`.
 
 An admin on the runner repository will then go to **Settings → Actions → Runners → New self-hosted runner**, choose the machine's OS and architecture, then follow all instructions provided by GitHub.
 This process will ask for a number of inputs:
@@ -97,25 +93,11 @@ Everything goes under `<runner>/_work/_nwb_benchmarks`, except `tshark` on Linux
 It reports what it found, `sudo`, the default network interface, and disk space; builds the benchmark conda environment once to prove the toolchain works; and ends with any lines to add to the runner's workflow file.
 Re-run it any time to repair a machine; it only installs what is missing.
 
-### 4. Create the upload token
-
-Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with:
-
-- **Repository access**: only the results repository, `NeurodataWithoutBorders/nwb-benchmarks-results`. The token's owner needs write access to it, because results are committed straight to its default branch (`dev`).
-- **Permissions**: *Contents: Read and write*. Nothing else.
-
-A classic token with the `public_repo` scope also works, but is not recommended for security reasons.
-
-### 5. Store the token as a repository secret
-
-A repository administrator adds the token under **Settings → Secrets and variables → Actions → New repository secret**, named `RESULTS_UPLOAD_TOKEN_<LABEL>`.
-The runner label in uppercase with dashes turned into underscores (`lbl_laptop` → `RESULTS_UPLOAD_TOKEN_LBL_LAPTOP`).
-
-### 6. Add the per-runner workflow
+### 4. Add the per-runner workflow
 
 Copy `templates/runner-workflow.yml` to `.github/workflows/runner-<label>.yml` and:
 
-- replace every `RUNNER_LABEL` with your label and `RUNNER_SECRET_NAME` with the secret name from step 5.
+- replace every `RUNNER_LABEL` with your label.
 - choose a cron schedule (UTC).
 
 Open a pull request to `main`.
@@ -163,7 +145,7 @@ sudo ./svc.sh install root
 sudo ./svc.sh start
 ```
 
-Every step of every job then runs as root, including the upload step that holds the token.
+Every step of the benchmark job then runs as root.
 
 Other details:
 - Set `use_sudo: false` so the action does not wrap the command a second time; the Set up runner workflow, run on that runner, installs everything under `_work` as before.

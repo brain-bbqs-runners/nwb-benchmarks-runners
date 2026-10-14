@@ -1,0 +1,54 @@
+# Composite action: commits the result files that the benchmarks action saved as a workflow
+# artifact to the results repository. Run it on a GitHub-hosted runner, never a self-hosted
+# one: it is the only place the upload token is used, so the token never reaches a
+# self-hosted machine. .github/workflows/benchmarks.yml runs it in its upload job. It can also
+# be used directly, in a job that needs the benchmark job:
+#
+#   - uses: brain-bbqs-runners/nwb-benchmarks-runners/.github/actions/upload-results@main
+#     with:
+#       artifact-name: ${{ needs.benchmarks.outputs.pending_artifact }}
+#       runner-label: lbl_laptop
+#       results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN }}
+#
+# The commit script lives with the benchmarks action, in ../benchmarks/scripts.
+name: NWB Benchmarks upload
+description: Commit the result files saved by the NWB Benchmarks run action to the results repository.
+
+inputs:
+  artifact-name:
+    description: Name of the workflow artifact to upload, the pending-artifact output of the benchmarks action.
+    required: true
+  runner-label:
+    description: Label of the runner that produced the files, used in the commit messages.
+    required: false
+    default: ""
+  results-upload-token:
+    description: Token with write access to results-repository.
+    required: true
+  results-repository:
+    description: Repository (owner/name) the results are committed to. The token needs write access to it.
+    required: false
+    default: NeurodataWithoutBorders/nwb-benchmarks-results
+  results-branch:
+    description: Branch the results are committed to. Empty uses the default branch of results-repository.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Download the result files
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ runner.temp }}/nwb-benchmarks-upload-files
+
+    - name: Commit the result files to the results repository
+      shell: bash
+      env:
+        RESULTS_FILES_DIR: ${{ runner.temp }}/nwb-benchmarks-upload-files
+        RESULTS_UPLOAD_TOKEN: ${{ inputs.results-upload-token }}
+        RESULTS_REPOSITORY: ${{ inputs.results-repository }}
+        RESULTS_BRANCH: ${{ inputs.results-branch }}
+        RUNNER_LABEL: ${{ inputs.runner-label }}
+      run: bash "$GITHUB_ACTION_PATH/../benchmarks/scripts/upload_results.sh"

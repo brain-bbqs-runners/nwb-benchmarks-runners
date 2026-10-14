@@ -24,6 +24,17 @@ is_macos() { [ "$(uname -s)" = "Darwin" ]; }
 
 is_linux() { [ "$(uname -s)" = "Linux" ]; }
 
+# Prints the results-repository subdirectory for a result, machine, or environment file name,
+# mirroring the layout the retired upload server used. Fails for any other name.
+subdir_for() {
+  case "$1" in
+    environment-*.json) printf 'environments\n' ;;
+    machine-*.json) printf 'machines\n' ;;
+    *_results.json) printf 'results\n' ;;
+    *) return 1 ;;
+  esac
+}
+
 # Prints "true" or "false" for yes/no style values. Usage: normalize_bool "$value" "<default>"
 normalize_bool() {
   local value

@@ -401,7 +401,6 @@ DISK_STATUS="$(df -h "$STATE_DIR" | awk 'NR == 2 { print $4 " free on " $1 }')"
 log "Disk: $DISK_STATUS"
 
 # --- summary ------------------------------------------------------------------------
-SECRET_NAME="RESULTS_UPLOAD_TOKEN_$(printf '%s' "$LABEL" | tr 'a-z-' 'A-Z_')"
 {
   echo "### Requirements on runner \`$LABEL\`"
   echo ""
@@ -439,5 +438,5 @@ SECRET_NAME="RESULTS_UPLOAD_TOKEN_$(printf '%s' "$LABEL" | tr 'a-z-' 'A-Z_')"
     done
     echo ""
   fi
-  echo "This runner's workflow file is \`.github/workflows/runner-$LABEL.yml\` and its secret is \`$SECRET_NAME\`."
+  echo "This runner's workflow file is \`.github/workflows/runner-$LABEL.yml\`."
 } | tee -a "$SUMMARY"

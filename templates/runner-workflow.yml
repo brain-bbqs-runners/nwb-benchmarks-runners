@@ -3,14 +3,11 @@
 # 1. Copy this file to .github/workflows/runner-<label>.yml
 # 2. Replace every RUNNER_LABEL with the label you gave the self-hosted runner
 #    (lowercase letters, digits, dashes, and underscores; e.g. `lbl_laptop`).
-# 3. Replace RUNNER_SECRET_NAME with the name of the repository secret that holds this
-#    runner's upload token. Convention: RESULTS_UPLOAD_TOKEN_ followed by the label in
-#    uppercase with dashes turned into underscores (e.g. RESULTS_UPLOAD_TOKEN_LBL_LAPTOP).
-# 4. Pick a cron schedule (UTC). The runners run hourly, each run measuring one benchmark
+# 3. Pick a cron schedule (UTC). The runners run hourly, each run measuring one benchmark
 #    chosen at random; pick a different minute than the other runners if several machines
 #    share a network.
-# 5. Uncomment and fill in the machine configuration your machine needs (often nothing).
-# 6. Optionally pin a `benchmark_pattern` to make this a "situation" workflow that runs a
+# 4. Uncomment and fill in the machine configuration your machine needs (often nothing).
+# 5. Optionally pin a `benchmark_pattern` to make this a "situation" workflow that runs a
 #    subset of the suite (e.g. only `time_remote_slicing`, or `.` for all of it) instead of one
 #    benchmark chosen at random.
 #
@@ -77,5 +74,6 @@ jobs:
       debug: ${{ github.event_name == 'workflow_dispatch' && inputs.debug }}
       upload: ${{ github.event_name != 'workflow_dispatch' || inputs.upload }}
     secrets:
-      # Repository secret holding this runner's token: Settings > Secrets and variables > Actions.
-      RESULTS_UPLOAD_TOKEN: ${{ secrets.RUNNER_SECRET_NAME }}
+      # The upload token all runners share (Settings > Secrets and variables > Actions). Only
+      # the upload job, on a GitHub-hosted runner, uses it; this machine never receives it.
+      RESULTS_UPLOAD_TOKEN: ${{ secrets.RESULTS_UPLOAD_TOKEN }}
