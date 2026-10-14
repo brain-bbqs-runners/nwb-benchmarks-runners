@@ -118,7 +118,7 @@ Copy `templates/runner-workflow.yml` to `.github/workflows/runner-<label>.yml` a
 - replace every `RUNNER_LABEL` with your label and `RUNNER_SECRET_NAME` with the secret name from step 5.
 - choose a cron schedule (UTC).
 
-Open a pull request to `dev`.
+Open a pull request to `main`.
 
 ### Workflow inputs
 

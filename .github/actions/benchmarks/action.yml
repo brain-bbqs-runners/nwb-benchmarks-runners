@@ -3,7 +3,7 @@
 # up executing; .github/workflows/benchmarks.yml wraps it with the job-level settings
 # (runner selection, concurrency, timeout). It can also be used directly:
 #
-#   - uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
+#   - uses: brain-bbqs-runners/nwb-benchmarks-runners/.github/actions/benchmarks@main
 #     with:
 #       runner-label: lbl_laptop
 #       results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN_LBL_LAPTOP }}

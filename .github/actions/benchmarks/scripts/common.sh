@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared helpers for the nwb-benchmarks-runner scripts. Source this file; do not run it.
+# Shared helpers for the nwb-benchmarks-runners scripts. Source this file; do not run it.
 #
 # Everything here must work with the stock bash 3.2 that ships with macOS as well as
 # modern bash on Linux and Git Bash on Windows.
