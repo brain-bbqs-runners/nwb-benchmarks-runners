@@ -18,7 +18,7 @@ The folder is a sibling of the runner's own `_temp` and `_tool` folders.
 | `toolchain/` | git and, on Linux, conda-forge's C and C++ compiler, installed from conda-forge by the Set up runner workflow when the machine has none. Its own `bin/` is never put on `PATH`. |
 | `bin/` | Links to `git`, `cc`, `gcc`, `c++` and `g++` in `toolchain/`. The first step of every job puts this folder first on `PATH` and, when it holds the compiler, points `CC` and `CXX` at it. |
 
-The clone of `nwb-benchmarks` lives in the job workspace (`_work/nwb-benchmarks-runner/.../nwb-benchmarks`) and is removed at the end of every job.
+The clone of `nwb-benchmarks` lives in the job workspace (`_work/nwb-benchmarks-runners/.../nwb-benchmarks`) and is removed at the end of every job.
 Result files stay owned by the runner's user even after a `sudo` run; the workflow restores ownership of the whole state directory itself.
 
 ## What the Set up runner workflow installs
@@ -38,7 +38,7 @@ The action holds every step and its shell scripts, so it can also be used on its
 
 ```yaml
 steps:
-  - uses: CodyCBakerPhD/nwb-benchmarks-runner/.github/actions/benchmarks@dev
+  - uses: brain-bbqs-runners/nwb-benchmarks-runners/.github/actions/benchmarks@main
     with:
       runner-label: lbl_laptop
       results-upload-token: ${{ secrets.RESULTS_UPLOAD_TOKEN_LBL_LAPTOP }}
@@ -49,7 +49,7 @@ The inputs of the action are the workflow inputs with dashes instead of undersco
 
 ## Operational notes
 
-- Cron schedules are in UTC and only run from the default branch (`dev`). GitHub disables scheduled workflows after 60 days without commits to the repository; any commit re-enables them.
+- Cron schedules are in UTC and only run from the default branch (`main`). GitHub disables scheduled workflows after 60 days without commits to the repository; any commit re-enables them.
 - A runner never executes two benchmark jobs at once; a second trigger for the same label waits for the first to finish, and GitHub keeps at most one run waiting per runner, so hourly triggers that arrive while a long benchmark runs are canceled rather than queued up. Put different machines on different minutes if they share a network connection.
 - Jobs time out after 5 days by default (`timeout_minutes`), the maximum GitHub allows for a job on a self-hosted runner.
 - A scheduled run measures one benchmark chosen at random (`nwb_benchmarks run --random`), about a hundred are eligible, and the runners run hourly, so each benchmark is sampled about every four days on average. The chosen benchmark is in the job summary and in the console log.
