@@ -67,6 +67,23 @@ jobs:
 
 The inputs of the actions are the workflow inputs with dashes instead of underscores; `lint.yml` checks that each action only references inputs it declares.
 
+## The upload token
+
+All runners upload with one shared fine-grain token, stored once as the repository secret `RESULTS_UPLOAD_TOKEN`.
+
+Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new), from the account that should own the uploads (a maintainer's, or a dedicated bot account), with:
+
+- **Repository access**: only the results repository, `NeurodataWithoutBorders/nwb-benchmarks-results`. The token's owner needs write access to it, because results are committed straight to its default branch (`dev`).
+- **Permissions**: *Contents: Read and write*. Nothing else.
+
+A classic token with the `public_repo` scope also works, but is not recommended for security reasons.
+
+A repository administrator adds the token under **Settings → Secrets and variables → Actions → New repository secret**, named `RESULTS_UPLOAD_TOKEN`.
+To rotate it, replace the secret's value; nothing on the runners has to change.
+While the secret is missing or expired, the upload jobs fail and the result files wait on the runners, which send them again once it is replaced.
+
+The token is only used by the upload job, which runs on a GitHub-hosted runner after each benchmark job, so it never reaches a self-hosted machine.
+
 ## Operational notes
 
 - Cron schedules are in UTC and only run from the default branch (`main`). GitHub disables scheduled workflows after 60 days without commits to the repository; any commit re-enables them.

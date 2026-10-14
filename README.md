@@ -7,7 +7,6 @@ Each contributor registers one or more of their own machines as self-hosted runn
 ## Contents
 
 - [How it works](#how-it-works)
-- [The upload token](#the-upload-token)
 - [Adding a runner](#adding-a-runner)
   - [1. Register the self-hosted runner](#1-register-the-self-hosted-runner)
   - [2. Grant the runner's user passwordless `sudo`](#2-grant-the-runners-user-passwordless-sudo)
@@ -22,9 +21,7 @@ Each contributor registers one or more of their own machines as self-hosted runn
 
 A runner is described by **one workflow file** `.github/workflows/runner-<label>.yml`, which names the runner label (e.g. `lbl_laptop`), picks the schedule, and sets any machine-specific inputs (conda location, network interface, and so on).
 
-
-Every run has two jobs.
-The benchmark job, on the self-hosted runner:
+Every job on a self-hosted runner:
 
 1. Clones `nwb-benchmarks` at the requested ref.
 2. Creates a **fresh** conda environment from `environments/nwb_benchmarks.yaml`. Fresh on purpose: the benchmarks track performance against current dependency versions, and the environment id stored with each result is derived from the installed packages.
@@ -33,26 +30,8 @@ The benchmark job, on the self-hosted runner:
 5. Reads the results repository, without a token, and moves the pending files it already has to `~/.nwb_benchmarks/runner/uploaded/`. The other pending files, this run's and any whose earlier upload failed, are saved as a workflow artifact for the upload job.
 6. Removes the clone and the conda environment, and gives the files written under `sudo` back to the runner's user.
 
-The upload job, on a GitHub-hosted runner, then downloads that artifact, clones the results repository, copies in every file that is not already there, commits, and pushes with the upload token (retrying if another runner pushed first).
+The upload job, on a GitHub-hosted runner, then downloads that artifact, clones the results repository, copies in every file that is not already there, commits, and pushes with the [upload token](docs/development.md#the-upload-token) (retrying if another runner pushed first).
 If the upload fails, the files stay pending on the machine and go with its next run.
-
-## The upload token
-
-All runners upload with one token, stored once as the repository secret `RESULTS_UPLOAD_TOKEN`.
-Adding a runner needs nothing here; this is only for setting the token up the first time, and for replacing it.
-
-Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new), from the account that should own the uploads (a maintainer's, or a dedicated bot account), with:
-
-- **Repository access**: only the results repository, `NeurodataWithoutBorders/nwb-benchmarks-results`. The token's owner needs write access to it, because results are committed straight to its default branch (`dev`).
-- **Permissions**: *Contents: Read and write*. Nothing else.
-
-A classic token with the `public_repo` scope also works, but is not recommended for security reasons.
-
-A repository administrator adds the token under **Settings → Secrets and variables → Actions → New repository secret**, named `RESULTS_UPLOAD_TOKEN`.
-To rotate it, replace the secret's value; nothing on the runners has to change.
-While the secret is missing or expired, the upload jobs fail and the result files wait on the runners, which send them again once it is replaced.
-
-The token is only used by the upload job, which runs on a GitHub-hosted runner after each benchmark job, so it never reaches a self-hosted machine.
 
 ## Adding a runner
 
@@ -120,8 +99,6 @@ Copy `templates/runner-workflow.yml` to `.github/workflows/runner-<label>.yml` a
 
 - replace every `RUNNER_LABEL` with your label.
 - choose a cron schedule (UTC).
-
-The template already passes the shared upload token, so a new runner needs no secret of its own.
 
 Open a pull request to `main`.
 
