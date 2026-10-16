@@ -29,7 +29,7 @@ Every job on a self-hosted runner:
 
 1. Clones `nwb-benchmarks` at the requested ref.
 2. Creates a **fresh** conda environment from `environments/nwb_benchmarks.yaml`. Fresh on purpose: the benchmarks track performance against current dependency versions, and the environment id stored with each result is derived from the installed packages.
-3. Runs `nwb_benchmarks run --random` from the clone under `sudo -E`, because the network tracking benchmarks need root. Each run measures one benchmark chosen at random, so the suite is sampled over many short runs rather than run in one long one, and a run that is cut short loses at most that benchmark. Only this command runs as root, and the console output is saved as a job artifact.
+3. Runs `nwb_benchmarks run --random` from the clone under `sudo -E`, because the network tracking benchmarks need root. Each run starts benchmarks chosen at random, one after another, for 40 minutes (`random_minutes`), so the suite is sampled over many short runs rather than run in one long one, and a run that is cut short loses at most the benchmark in progress. A benchmark that produces no results is reported and the next one starts. Only this command runs as root, and the console output is saved as a job artifact.
 4. Moves the new files from `~/.nwb_benchmarks/{results,machines,environments}` into `~/.nwb_benchmarks/runner/pending/`.
 5. Reads the results repository, without a token, and moves the pending files it already has to `~/.nwb_benchmarks/runner/uploaded/`. The other pending files, this run's and any whose earlier upload failed, are saved as a workflow artifact for the upload job.
 6. Removes the clone and the conda environment, and gives the files written under `sudo` back to the runner's user.
@@ -115,7 +115,8 @@ If needed, set these under `with:` in `runner-<label>.yml`.
 | `runner` | required | Runner label. |
 | `nwb_benchmarks_repository` | `NeurodataWithoutBorders/nwb-benchmarks` | Fork to benchmark instead of upstream. |
 | `nwb_benchmarks_ref` | `main` | Branch, tag, or commit of the suite to run. |
-| `benchmark_pattern` | empty (one benchmark at random) | `--bench` pattern selecting a subset of the suite instead; `.` selects all of it. |
+| `benchmark_pattern` | empty (benchmarks at random for `random_minutes`) | `--bench` pattern selecting a subset of the suite instead, run once; `.` selects all of it. |
+| `random_minutes` | `40` | Benchmarks chosen at random keep starting, one after another, while less than this many minutes have passed since the first one started; the last one may end later. `0` runs one. |
 | `debug` | `false` | `--debug`: one repeat, verbose output, nothing staged or uploaded. |
 | `upload` | `true` | Set to `false` to run without uploading. |
 | `run_download_benchmarks` | `false` | Include the download benchmarks, which download whole NWB files through the DANDI API. The suite leaves them out by default because they are long and need bandwidth and disk space. |
@@ -131,7 +132,7 @@ If needed, set these under `with:` in `runner-<label>.yml`.
 | `results_repository` | `NeurodataWithoutBorders/nwb-benchmarks-results` | Repository the results are committed to; the token needs write access to it. |
 | `results_branch` | the repository's default branch | Branch the results are committed to. |
 
-The manual trigger form of each per-runner workflow exposes `benchmark_pattern`, `nwb_benchmarks_ref`, `debug`, and `upload`; scheduled runs use one benchmark chosen at random, `main`, no debug, and upload.
+The manual trigger form of each per-runner workflow exposes `benchmark_pattern`, `nwb_benchmarks_ref`, `debug`, and `upload`; scheduled runs use benchmarks chosen at random for `random_minutes`, `main`, no debug, and upload.
 
 ## Other setups (optional)
 

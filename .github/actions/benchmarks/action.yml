@@ -37,9 +37,13 @@ inputs:
     required: false
     default: main
   benchmark-pattern:
-    description: Optional `--bench` pattern selecting a subset of the suite. Empty runs one benchmark chosen at random (`nwb_benchmarks run --random`).
+    description: Optional `--bench` pattern selecting a subset of the suite, run once. Empty runs benchmarks chosen at random (`nwb_benchmarks run --random`) for random-minutes.
     required: false
     default: ""
+  random-minutes:
+    description: When benchmark-pattern is empty, keep starting benchmarks chosen at random, one after another, while less than this many minutes have passed since the first one started; the last one may end later. "0" runs one.
+    required: false
+    default: "40"
   debug:
     description: '"true" runs with `--debug` (one repeat, verbose output, nothing uploaded).'
     required: false
@@ -175,6 +179,7 @@ runs:
       shell: bash
       env:
         BENCHMARK_PATTERN: ${{ inputs.benchmark-pattern }}
+        RANDOM_MINUTES: ${{ inputs.random-minutes }}
         DEBUG_MODE: ${{ inputs.debug }}
         RUN_DOWNLOAD_BENCHMARKS_INPUT: ${{ inputs.run-download-benchmarks }}
         RUN_INCREMENTAL_SLICING_BENCHMARKS_INPUT: ${{ inputs.run-incremental-slicing-benchmarks }}

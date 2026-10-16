@@ -8,12 +8,13 @@ name: Benchmarks (lbl-mac)
 
 on:
   schedule:
-    # Every hour; each run measures one benchmark chosen at random. Staggered from ackermann.
+    # Every hour; each run starts benchmarks chosen at random for 40 minutes. Staggered from
+    # ackermann.
     - cron: "47 * * * *"
   workflow_dispatch:
     inputs:
       benchmark_pattern:
-        description: Optional `--bench` pattern; leave empty for one benchmark chosen at random
+        description: Optional `--bench` pattern, run once; leave empty for benchmarks chosen at random
         required: false
         type: string
         default: ""

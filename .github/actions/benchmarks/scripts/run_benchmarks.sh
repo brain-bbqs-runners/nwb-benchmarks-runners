@@ -1,20 +1,25 @@
 #!/usr/bin/env bash
-# Runs one benchmark of the NWB Benchmarks suite, chosen at random by `nwb_benchmarks run --random`,
-# inside the conda environment prepared by setup_environment.sh, then stages the new result files
-# for upload. Each scheduled run therefore samples the suite instead of running all of it, and a run
-# that is cut short loses at most that one benchmark. BENCHMARK_PATTERN runs a chosen subset instead.
+# Runs benchmarks of the NWB Benchmarks suite chosen at random by `nwb_benchmarks run --random`,
+# one after another, inside the conda environment prepared by setup_environment.sh, then stages the
+# new result files for upload. A new benchmark starts only while less than RANDOM_MINUTES have
+# passed since the first one started, so the last one may end later. Each scheduled run therefore
+# samples the suite instead of running all of it, and a run that is cut short loses at most the
+# benchmark in progress. A benchmark that produces no results is reported and the next one starts;
+# the run fails only when none produced results. BENCHMARK_PATTERN runs a chosen subset once instead.
 #
 # `nwb_benchmarks run` writes its reduced results to ~/.nwb_benchmarks/{results,machines,
 # environments}. The files produced by this run are moved (results) or copied (machine and
-# environment provenance) into a runner-owned staging directory, from which
-# upload_results.sh commits them. Files whose upload fails stay staged and are retried by
-# the next run.
+# environment provenance) into a runner-owned staging directory, from which collect_pending.sh
+# hands them to the upload job. Files whose upload fails stay staged and are retried by the
+# next run.
 #
 # Inputs (environment variables):
 #   NWB_BENCHMARKS_CLONE_DIR            path to the nwb-benchmarks checkout (required)
 #   CONDA_ROOT, NWB_BENCHMARKS_CONDA_ENV  written by setup_environment.sh (required)
-#   BENCHMARK_PATTERN                   optional `--bench` pattern; empty runs one benchmark at random
-#   DEBUG_MODE                          "true" passes `--debug`; nothing is staged for upload
+#   BENCHMARK_PATTERN                   optional `--bench` pattern; empty runs benchmarks at random
+#   RANDOM_MINUTES                      minutes during which benchmarks chosen at random keep starting
+#                                       (default 40; 0 runs one)
+#   DEBUG_MODE                          "true" passes `--debug` and runs once; nothing is staged for upload
 #   RUN_DOWNLOAD_BENCHMARKS_INPUT       "true" includes the suite's opt-in download benchmarks
 #   RUN_INCREMENTAL_SLICING_BENCHMARKS_INPUT  "all" or a modality list includes the suite's opt-in
 #                                       incremental slicing benchmarks; empty leaves them out
@@ -38,12 +43,17 @@ CONDA_ROOT="${CONDA_ROOT:?CONDA_ROOT is not set; run setup_environment.sh first}
 ENV_NAME="${NWB_BENCHMARKS_CONDA_ENV:?NWB_BENCHMARKS_CONDA_ENV is not set; run setup_environment.sh first}"
 DEBUG_MODE="$(normalize_bool "${DEBUG_MODE:-}" false)"
 BENCHMARK_PATTERN="${BENCHMARK_PATTERN:-}"
+RANDOM_MINUTES="${RANDOM_MINUTES:-40}"
 TEMP_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 LOG_FILE="${RUNNER_LOG_FILE:-$TEMP_DIR/nwb-benchmarks-run.log}"
 ARTIFACT_DIR="${RUNNER_ARTIFACT_DIR:-$TEMP_DIR/nwb-benchmarks-artifact}"
 BENCHMARKS_HOME="$HOME/.nwb_benchmarks"
 PENDING_DIR="${RUNNER_PENDING_DIR:-$BENCHMARKS_HOME/runner/pending}"
 GITHUB_OUTPUT="${GITHUB_OUTPUT:-/dev/null}"
+
+case "$RANDOM_MINUTES" in
+  "" | *[!0-9]*) die "RANDOM_MINUTES must be a whole number of minutes, got '$RANDOM_MINUTES'." ;;
+esac
 
 mkdir -p "$BENCHMARKS_HOME/results" "$BENCHMARKS_HOME/machines" "$BENCHMARKS_HOME/environments" \
   "$PENDING_DIR/results" "$PENDING_DIR/machines" "$PENDING_DIR/environments" \
@@ -137,6 +147,9 @@ log "Run with sudo: $USE_SUDO"
 list_results() {
   find "$BENCHMARKS_HOME/results" -maxdepth 1 -type f -name '*_results.json' -exec basename {} ';' | sort
 }
+count_new_results() {
+  comm -13 <(printf '%s\n' "$1") <(list_results) | sed '/^$/d' | wc -l | tr -d ' '
+}
 before="$(list_results)"
 
 command=(nwb_benchmarks run)
@@ -156,19 +169,65 @@ if [ "$USE_SUDO" = true ]; then
   command=(sudo -E env "PATH=$PATH" "HOME=$HOME" "$nwb_benchmarks_bin" "${command[@]:1}")
 fi
 
+# Benchmarks chosen at random keep starting while the run is under its time budget; a pattern
+# or debug run runs once. A suite that keeps failing is not retried for the whole budget.
+MAX_FAILURES_IN_A_ROW=3
+budget_seconds=0
+if [ -z "$BENCHMARK_PATTERN" ] && [ "$DEBUG_MODE" != true ]; then
+  budget_seconds=$((RANDOM_MINUTES * 60))
+  log "Starting benchmarks chosen at random for $RANDOM_MINUTES minute(s)"
+fi
+
 cd "$CLONE_DIR"
 log "Working directory: $PWD"
 log "Command: ${command[*]}"
 log "Console output is also saved to: $LOG_FILE"
-group_start "nwb_benchmarks run"
-set +e
-"${command[@]}" 2>&1 | tee "$LOG_FILE"
-status=${PIPESTATUS[0]}
-set -e
-group_end
-log "nwb_benchmarks exited with status $status"
-# `--random` prints the benchmark it chose; keep it for the summary.
-selected_benchmark="$(sed -n 's/^Randomly selected benchmark: //p' "$LOG_FILE" | tail -n 1)"
+: > "$LOG_FILE"
+round_log="$TEMP_DIR/nwb-benchmarks-round.log"
+rounds=0
+failed_rounds=0
+failures_in_a_row=0
+status=0
+ROUND_SUMMARY=""
+SECONDS=0
+while :; do
+  rounds=$((rounds + 1))
+  round_before="$(list_results)"
+  group_start "nwb_benchmarks run ($rounds)"
+  set +e
+  "${command[@]}" 2>&1 | tee "$round_log"
+  status=${PIPESTATUS[0]}
+  set -e
+  group_end
+  cat "$round_log" >> "$LOG_FILE"
+  # `--random` prints the benchmark it chose.
+  selected="$(sed -n 's/^Randomly selected benchmark: //p' "$round_log" | tail -n 1)"
+  round_new="$(count_new_results "$round_before")"
+  log "nwb_benchmarks exited with status $status (${selected:-benchmark not reported}, $round_new new results file(s))"
+  if [ "$round_new" -eq 0 ]; then
+    failed_rounds=$((failed_rounds + 1))
+    failures_in_a_row=$((failures_in_a_row + 1))
+    warn "${selected:-nwb_benchmarks run} produced no results file (exit status $status). Check the console output above."
+    ROUND_SUMMARY="${ROUND_SUMMARY}  - \`${selected:-unknown}\`: no results (exit status $status)"$'\n'
+  else
+    failures_in_a_row=0
+    if [ "$status" -ne 0 ]; then
+      warn "nwb_benchmarks exited with status $status but did write results. Versions of nwb-benchmarks that still POST results to the retired upload server fail at that final step; this workflow uploads the files instead."
+    fi
+    ROUND_SUMMARY="${ROUND_SUMMARY}  - \`${selected:-unknown}\`: $round_new results file(s)"$'\n'
+  fi
+  if [ "$SECONDS" -ge "$budget_seconds" ]; then
+    break
+  fi
+  if [ "$failures_in_a_row" -ge "$MAX_FAILURES_IN_A_ROW" ]; then
+    warn "$failures_in_a_row benchmarks in a row produced no results; not starting another."
+    break
+  fi
+  log "$((SECONDS / 60)) of $RANDOM_MINUTES minute(s) used; starting another benchmark."
+done
+rm -f "$round_log"
+elapsed_minutes=$((SECONDS / 60))
+log "Ran $rounds benchmark(s) in $elapsed_minutes minute(s)"
 
 if [ "$USE_SUDO" = true ]; then
   repair_ownership
@@ -181,14 +240,13 @@ if [ "$DEBUG_MODE" = true ]; then
 fi
 
 # --- Stage the new files for upload -------------------------------------------------
-after="$(list_results)"
-new_results="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | sed '/^$/d')"
+new_results="$(comm -13 <(printf '%s\n' "$before") <(list_results) | sed '/^$/d')"
 
 if [ -z "$new_results" ]; then
-  die "No new results file appeared in $BENCHMARKS_HOME/results (nwb_benchmarks exit status: $status). Check the console output above."
+  die "No new results file appeared in $BENCHMARKS_HOME/results after $rounds benchmark(s) (last nwb_benchmarks exit status: $status). Check the console output above."
 fi
-if [ "$status" -ne 0 ]; then
-  warn "nwb_benchmarks exited with status $status but did write results. Versions of nwb-benchmarks that still POST results to the retired upload server fail at that final step; this workflow uploads the files instead."
+if [ "$failed_rounds" -gt 0 ]; then
+  warn "$failed_rounds of $rounds benchmark(s) produced no results; the results of the others are uploaded."
 fi
 
 count=0
@@ -226,7 +284,8 @@ log "$count result file(s) staged in $PENDING_DIR"
   if [ -n "$BENCHMARK_PATTERN" ]; then
     echo "- benchmark pattern: \`$BENCHMARK_PATTERN\`"
   else
-    echo "- benchmark (chosen at random): \`${selected_benchmark:-unknown}\`"
+    echo "- benchmarks chosen at random: $rounds in $elapsed_minutes minute(s) (budget: $RANDOM_MINUTES)"
+    printf '%s' "$ROUND_SUMMARY"
   fi
   echo "- new result files: $count"
   if [ -n "${RUN_DOWNLOAD_BENCHMARKS:-}" ]; then
@@ -236,5 +295,5 @@ log "$count result file(s) staged in $PENDING_DIR"
   fi
   echo "- incremental slicing benchmarks: ${RUN_INCREMENTAL_SLICING_BENCHMARKS:-left out}"
   echo "- ran with sudo: $USE_SUDO"
-  echo "- nwb_benchmarks exit status: $status"
+  echo "- last nwb_benchmarks exit status: $status"
 } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"

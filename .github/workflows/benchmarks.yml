@@ -36,10 +36,15 @@ on:
         type: string
         default: main
       benchmark_pattern:
-        description: Optional `--bench` pattern selecting a subset of the suite. Empty runs one benchmark chosen at random (`nwb_benchmarks run --random`).
+        description: Optional `--bench` pattern selecting a subset of the suite, run once. Empty runs benchmarks chosen at random (`nwb_benchmarks run --random`) for random_minutes.
         required: false
         type: string
         default: ""
+      random_minutes:
+        description: When benchmark_pattern is empty, keep starting benchmarks chosen at random, one after another, while less than this many minutes have passed since the first one started; the last one may end later. 0 runs one.
+        required: false
+        type: number
+        default: 40
       debug:
         description: Run with `--debug` (one repeat, verbose output, nothing uploaded). Use it to smoke-test a new runner.
         required: false
@@ -153,6 +158,7 @@ jobs:
           nwb-benchmarks-repository: ${{ inputs.nwb_benchmarks_repository }}
           nwb-benchmarks-ref: ${{ inputs.nwb_benchmarks_ref }}
           benchmark-pattern: ${{ inputs.benchmark_pattern }}
+          random-minutes: ${{ inputs.random_minutes }}
           debug: ${{ inputs.debug }}
           upload: ${{ inputs.upload }}
           run-download-benchmarks: ${{ inputs.run_download_benchmarks }}
@@ -171,7 +177,7 @@ jobs:
   # If it fails, the machine keeps the files pending and sends them again with its next run;
   # re-running this job alone also works while the artifact is kept (7 days).
   upload:
-    name: ${{ inputs.runner }} upload
+    name: upload
     needs: benchmarks
     if: ${{ needs.benchmarks.outputs.pending_artifact != '' }}
     runs-on: ubuntu-latest
