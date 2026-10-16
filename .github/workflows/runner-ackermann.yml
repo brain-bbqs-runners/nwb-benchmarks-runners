@@ -8,17 +8,17 @@ name: Benchmarks (ackermann)
 
 on:
   schedule:
-    # Every hour from noon to midnight Eastern time; each run measures one benchmark chosen at
-    # random. Staggered from lbl-mac. Cron is UTC and ignores daylight saving, so these hours
-    # cover both the EDT window (16:17 to 03:17 UTC) and the EST window (17:17 to 04:17 UTC),
-    # and the `window` job below lets a run through only when it is really noon to midnight
-    # in New York.
+    # Every hour from noon to midnight Eastern time; each run starts benchmarks chosen at random
+    # for 40 minutes. Staggered from lbl-mac. Cron is UTC and ignores daylight saving, so these
+    # hours cover both the EDT window (16:17 to 03:17 UTC) and the EST window (17:17 to 04:17
+    # UTC), and the `window` job below lets a run through only when it is really noon to
+    # midnight in New York.
     - cron: "17 16-23 * * *"
     - cron: "17 0-4 * * *"
   workflow_dispatch:
     inputs:
       benchmark_pattern:
-        description: Optional `--bench` pattern; leave empty for one benchmark chosen at random
+        description: Optional `--bench` pattern, run once; leave empty for benchmarks chosen at random
         required: false
         type: string
         default: ""

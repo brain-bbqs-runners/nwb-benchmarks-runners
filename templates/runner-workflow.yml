@@ -3,13 +3,13 @@
 # 1. Copy this file to .github/workflows/runner-<label>.yml
 # 2. Replace every RUNNER_LABEL with the label you gave the self-hosted runner
 #    (lowercase letters, digits, dashes, and underscores; e.g. `lbl_laptop`).
-# 3. Pick a cron schedule (UTC). The runners run hourly, each run measuring one benchmark
-#    chosen at random; pick a different minute than the other runners if several machines
-#    share a network.
+# 3. Pick a cron schedule (UTC). The runners run hourly, each run starting benchmarks chosen
+#    at random for 40 minutes (`random_minutes`); pick a different minute than the other
+#    runners if several machines share a network.
 # 4. Uncomment and fill in the machine configuration your machine needs (often nothing).
 # 5. Optionally pin a `benchmark_pattern` to make this a "situation" workflow that runs a
-#    subset of the suite (e.g. only `time_remote_slicing`, or `.` for all of it) instead of one
-#    benchmark chosen at random.
+#    subset of the suite (e.g. only `time_remote_slicing`, or `.` for all of it) once instead
+#    of benchmarks chosen at random.
 #
 # Everything else is handled by .github/workflows/benchmarks.yml. See README.md for the
 # full list of inputs.
@@ -17,13 +17,13 @@ name: Benchmarks (RUNNER_LABEL)
 
 on:
   schedule:
-    # Every hour; each run measures one benchmark chosen at random. Pick a different minute
-    # than the other runners if several machines share a network.
+    # Every hour; each run starts benchmarks chosen at random for 40 minutes. Pick a different
+    # minute than the other runners if several machines share a network.
     - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       benchmark_pattern:
-        description: Optional `--bench` pattern; leave empty for one benchmark chosen at random
+        description: Optional `--bench` pattern, run once; leave empty for benchmarks chosen at random
         required: false
         type: string
         default: ""
